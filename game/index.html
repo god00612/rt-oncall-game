@@ -11,11 +11,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: 頂部值班狀態列 + 左側床位列 + 右側主畫面（交班單／床邊／護理站）；呼吸器螢幕固定深色，像真實機台 */
+/* Layout: 頂部值班狀態列 + 來電列 + 俯視病房地圖（canvas）；床邊、交班單、結算用浮層。呼吸器螢幕與地圖固定自己的配色 */
 :root{
   --bg:#eef1f0; --surface:#ffffff; --ink:#1c2422; --muted:#5d6b67; --line:#d3dbd8;
   --accent:#0f6e74; --accent-ink:#ffffff; --accent-soft:#d8ecec;
   --good:#1d7a44; --warn:#a86700; --bad:#b3261e; --good-soft:#dcf0e3; --warn-soft:#f6ead2; --bad-soft:#f7dcd9;
+  --scrim:rgba(20,30,28,.55);
   --vs-bg:#14202b; --vs-panel:#1c2b38; --vs-ink:#dce7ef; --vs-dim:#8aa0b2; --vs-p:#ffd25a; --vs-f:#5fd0e8; --vs-alarm:#ff6b5e;
   --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -23,244 +24,666 @@
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#111816; --surface:#1a2321; --ink:#e3ebe8; --muted:#9aaaa5; --line:#2e3b38;
   --accent:#4fb8be; --accent-ink:#06201f; --accent-soft:#18383a;
-  --good:#5cc489; --warn:#e0a63c; --bad:#f07a70; --good-soft:#163323; --warn-soft:#3a2c12; --bad-soft:#3d1c19; color-scheme:dark}}
+  --good:#5cc489; --warn:#e0a63c; --bad:#f07a70; --good-soft:#163323; --warn-soft:#3a2c12; --bad-soft:#3d1c19; --scrim:rgba(0,0,0,.6); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#111816; --surface:#1a2321; --ink:#e3ebe8; --muted:#9aaaa5; --line:#2e3b38;
   --accent:#4fb8be; --accent-ink:#06201f; --accent-soft:#18383a;
-  --good:#5cc489; --warn:#e0a63c; --bad:#f07a70; --good-soft:#163323; --warn-soft:#3a2c12; --bad-soft:#3d1c19; color-scheme:dark}
+  --good:#5cc489; --warn:#e0a63c; --bad:#f07a70; --good-soft:#163323; --warn-soft:#3a2c12; --bad-soft:#3d1c19; --scrim:rgba(0,0,0,.6); color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px}
-.wrap{max-width:1180px;margin:0 auto;display:grid;gap:14px}
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px}
+.wrap{max-width:1100px;margin:0 auto;display:grid;gap:10px}
 .mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
-button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 14px}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:7px 13px}
 button:hover{border-color:var(--accent)}
 button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
 button:disabled{opacity:.45;cursor:not-allowed}
 h1,h2,h3{margin:0;text-wrap:balance}
-/* 狀態列 */
-.bar{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 16px}
-.brand{font-weight:900;font-size:18px;letter-spacing:.02em}
-.brand small{display:block;font-weight:500;font-size:12px;color:var(--muted);letter-spacing:.08em}
-.clock{font-size:28px;font-weight:600;line-height:1}
-.stat{display:grid;gap:2px;font-size:12px;color:var(--muted);min-width:110px}
+.bar{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 14px}
+.brand{font-weight:900;font-size:17px}
+.brand small{display:block;font-weight:500;font-size:12px;color:var(--muted);letter-spacing:.06em}
+.clock{font-size:26px;font-weight:600;line-height:1}
+.stat{display:grid;gap:2px;font-size:12px;color:var(--muted);min-width:96px}
 .meter{height:8px;background:var(--line);border-radius:4px;overflow:hidden}
 .meter i{display:block;height:100%;background:var(--good);transition:width .3s}
 .meter.low i{background:var(--bad)}
-.ctrls{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
-/* 主區 */
-.main{display:grid;grid-template-columns:260px minmax(0,1fr);gap:14px;align-items:start}
-@media (max-width:820px){.main{grid-template-columns:minmax(0,1fr)}}
-.beds{display:grid;gap:8px}
-.bed{text-align:left;display:grid;gap:2px;padding:10px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--line)}
-.bed.sel{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
-.bed .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.bed b{font-size:17px}
-.bed .dx{font-size:13px;color:var(--muted)}
-.chip{font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
-.chip.alarm{background:var(--bad-soft);color:var(--bad)}
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:16px;min-width:0}
+.meter.hunger i{background:var(--warn)}
+.ctrls{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.calls{display:grid;gap:6px}
+.call{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;border:2px solid var(--bad);background:var(--bad-soft);border-radius:10px;padding:8px 14px}
+.call.calm{border-color:var(--warn);background:var(--warn-soft)}
+.call.info{border-color:var(--accent);background:var(--accent-soft)}
+.call .ring{font-weight:900;color:var(--bad);letter-spacing:.08em;white-space:nowrap}
+.call.calm .ring{color:var(--warn)}.call.info .ring{color:var(--accent)}
+.call p{margin:0;flex:1 1 280px;min-width:0}
+.call .left{font-family:var(--f-mono);font-size:13px;white-space:nowrap}
+@media (prefers-reduced-motion:no-preference){.call:not(.info) .ring{animation:ring 1s steps(2) infinite}@keyframes ring{50%{opacity:.35}}}
+.stage{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#2a3436}
+#map{display:block;width:100%;height:auto;touch-action:none;cursor:pointer}
+.act{position:absolute;right:max(10px,env(safe-area-inset-right,0px));bottom:10px;display:flex;gap:8px}
+.act button{background:rgba(255,255,255,.92);color:#1c2422;border-color:transparent;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.help{font-size:12px;color:var(--muted)}
+.log{font-size:13px;color:var(--muted);display:grid;gap:1px;max-height:110px;overflow:auto}
+/* 浮層 */
+.ov{position:fixed;inset:0;background:var(--scrim);display:flex;align-items:flex-start;justify-content:center;
+  padding:max(20px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) 20px max(12px,env(safe-area-inset-left,0px));overflow:auto;z-index:20}
+.ov[hidden]{display:none!important}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:14px;width:min(860px,100%);min-width:0;box-shadow:0 12px 40px rgba(0,0,0,.3)}
 .muted{color:var(--muted)}
-/* 電話 */
-.call{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;border:2px solid var(--bad);background:var(--bad-soft);border-radius:12px;padding:12px 16px}
-.call .ring{font-weight:900;color:var(--bad);letter-spacing:.1em}
-.call p{margin:0;flex:1 1 300px;min-width:0}
-@media (prefers-reduced-motion:no-preference){.call .ring{animation:ring 1s steps(2) infinite}@keyframes ring{50%{opacity:.35}}}
-/* 交班單 */
 .tbl-wrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:14px}
-th,td{border-bottom:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+th,td{border-bottom:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
 th{font-size:12px;color:var(--muted);font-weight:500;letter-spacing:.06em;white-space:nowrap}
 td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 .H{color:var(--bad);font-weight:700}.L{color:var(--accent);font-weight:700}
-/* 呼吸器螢幕 */
 .vent{background:var(--vs-bg);color:var(--vs-ink);border-radius:12px;padding:12px;display:grid;gap:10px;min-width:0}
 .vent .hd{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--vs-dim)}
 .vent .hd .alarm{color:var(--vs-alarm);font-weight:700}
-.vent canvas{width:100%;height:150px;display:block;background:var(--vs-panel);border-radius:8px}
-.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+.vent canvas{width:100%;height:140px;display:block;background:var(--vs-panel);border-radius:8px}
+.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px}
 .vcell{background:var(--vs-panel);border-radius:8px;padding:6px 9px;display:grid}
 .vcell span{font-size:11px;color:var(--vs-dim);letter-spacing:.05em}
-.vcell b{font-family:var(--f-mono);font-size:21px;font-weight:600;font-variant-numeric:tabular-nums}
+.vcell b{font-family:var(--f-mono);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
 .vcell.hi b{color:var(--vs-alarm)}
-.vitals{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:14px}
+.vitals{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px}
 .vitals b{font-family:var(--f-mono);font-size:18px}
 .find{background:var(--bg);border-radius:8px;padding:10px 12px;font-size:14px}
 .q{font-weight:700;font-size:17px}
 .opts{display:grid;gap:8px}
-.opts button{text-align:left;padding:11px 14px;line-height:1.5}
+.opts button{text-align:left;padding:10px 14px;line-height:1.5}
 .fb{border-radius:10px;padding:12px 14px;display:grid;gap:6px}
 .fb.good{background:var(--good-soft)}.fb.mid{background:var(--warn-soft)}.fb.bad{background:var(--bad-soft)}
 .fb h3{font-size:16px}
 .fb .real{font-size:13px;color:var(--muted)}
-.log{font-size:13px;color:var(--muted);display:grid;gap:2px;max-height:160px;overflow:auto}
-.end-score{font-size:46px;font-weight:900;font-family:var(--f-mono)}
+.end-score{font-size:44px;font-weight:900;font-family:var(--f-mono)}
 .hint{font-size:12px;color:var(--muted)}
+.keys{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted)}
+kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;background:var(--bg);color:var(--ink)}
 </style>
 
 <div class="wrap">
   <header class="bar">
-    <div class="brand">RT 值班模擬<small id="unitLabel">內科加護病房 · 小夜到大夜</small></div>
+    <div class="brand">RT 值班模擬<small>內科加護病房 · 16:00 – 08:00</small></div>
     <div><div class="clock mono" id="clock">16:00</div><div class="hint" id="toShift">距交班 16:00</div></div>
     <div class="stat">精力 <span class="meter" id="energyM"><i id="energyBar" style="width:100%"></i></span></div>
-    <div class="stat">分數 <b class="mono" id="score" style="font-size:18px;color:var(--ink)">0</b></div>
+    <div class="stat">肚子餓 <span class="meter hunger"><i id="hungerBar" style="width:30%"></i></span></div>
+    <div class="stat">分數 <b class="mono" id="score" style="font-size:17px;color:var(--ink)">0</b></div>
     <div class="ctrls">
       <button id="btnPause" disabled>暫停</button>
       <button id="btnSpeed" disabled>速度 1×</button>
       <button id="btnSkip" disabled>快轉到下一通電話</button>
-      <button id="btnRest" disabled>去值班室休息</button>
     </div>
   </header>
-  <div id="callBox"></div>
-  <div class="main">
-    <nav class="beds" id="beds" aria-label="床位"></nav>
-    <section class="panel" id="view"></section>
+  <div class="calls" id="calls"></div>
+  <div class="stage">
+    <canvas id="map" aria-label="加護病房平面圖。方向鍵或點擊移動，E 互動。"></canvas>
+    <div class="act"><button id="btnAct" hidden>E 互動</button></div>
   </div>
+  <div class="keys"><span><kbd>←↑↓→</kbd>/<kbd>WASD</kbd> 走路，或直接點地圖</span><span><kbd>Shift</kbd> 跑步（耗精力）</span><span><kbd>E</kbd> 看病人／休息／吃飯</span><span><kbd>Esc</kbd> 離開床邊</span><span><kbd>P</kbd> 暫停</span></div>
+  <div class="log" id="log"></div>
 </div>
+<div class="ov" id="ov" hidden><div class="panel" id="panel"></div></div>
 
 <!-- 案例資料：之後由 case_generator.py 產出同格式的 JSON（已去識別化）。以下全部為虛構案例。 -->
 <script type="application/json" id="caseData">
 {
-  "id":"demo_001",
-  "title":"示範案例（虛構）",
-  "unit":"內科加護病房",
-  "start":"16:00","end":"08:00",
-  "beds":[
-    {"bed":"A1","age":"70–79","sex":"男","dx":"肺炎併 ARDS","device":"MV",
-     "airway":"Oral 7.5 # / 22 cm","admitDay":4,
-     "vent":{"mode":"VC-AC","VT":400,"RR":18,"FiO2":60,"PEEP":12,"PIP":30,"Pplat":24},
-     "vitals":{"HR":96,"BP":"118/66","SpO2":94,"RRtotal":18},
-     "note":"痰多黃稠，q2h 抽痰。FiO2 ≥ 60%、PEEP ≥ 10。"},
-    {"bed":"A2","age":"60–69","sex":"女","dx":"COPD 急性惡化","device":"MV",
-     "airway":"Oral 7.0 # / 21 cm","admitDay":2,
-     "vent":{"mode":"VC-AC","VT":450,"RR":14,"FiO2":35,"PEEP":5,"PIP":34,"Pplat":22,"Ti":1.2},
-     "vitals":{"HR":108,"BP":"132/78","SpO2":93,"RRtotal":20},
-     "note":"晚上 19:00 抽 ABG。Berodual INHL q6h。"},
-    {"bed":"A3","age":"80–89","sex":"男","dx":"心衰竭肺水腫，今早拔管","device":"HFNC",
-     "airway":"無（今 09:00 拔管）","admitDay":6,
-     "hfnc":{"Flow":50,"FiO2":40},
-     "vitals":{"HR":102,"BP":"126/70","SpO2":95,"RRtotal":26},
-     "note":"拔管後第一天，注意喘。"},
-    {"bed":"A4","age":"50–59","sex":"男","dx":"腦中風術後，長期呼吸器","device":"MV",
-     "airway":"Tr 8.0 #","admitDay":23,
-     "vent":{"mode":"PSV","PS":10,"PEEP":5,"FiO2":30,"VT":420,"RR":20},
-     "vitals":{"HR":84,"BP":"128/72","SpO2":97,"RRtotal":20},
-     "note":"脫離中，明早評估 trach collar。"}
-  ],
-  "events":[
-    {"id":"e1","t":"18:20","bed":"A1","caller":"護理師","timeout":15,
-     "msg":"A1 呼吸器一直叫 high pressure，病人咳得很厲害，SpO2 掉到 88%。",
-     "state":{"vent":{"PIP":42,"Pplat":24},"vitals":{"SpO2":88,"HR":118},"alarm":"Paw 過高","wave":"resist"},
-     "finding":"聽診：雙側粗囉音。管路內可見黃稠痰。管路沒有扭折，病人沒有咬管。",
-     "question":"Peak 42、Plateau 24，你第一步要做什麼？",
-     "options":[
-       {"text":"抽痰，同時檢查管路有沒有扭折或積水","score":10,
-        "fb":"PIP 和 Pplat 差了 18 cmH2O，表示氣道阻力上升，例如痰、管路扭折、咬管或支氣管痙攣；肺順應性變化不大。抽出大量黃稠痰後，PIP 降回 31。",
-        "effect":{"vent":{"PIP":31,"Pplat":23},"vitals":{"SpO2":95,"HR":98}}},
-       {"text":"VT 從 400 降到 300，讓警報停下來","score":2,
-        "fb":"降 VT 能讓壓力下降，但通氣也會跟著不足，造成阻力的痰還在。","effect":{"vent":{"VT":300,"PIP":36},"vitals":{"SpO2":89}}},
-       {"text":"FiO2 調到 100%，然後通知醫師","score":5,
-        "fb":"提高 FiO2 能暫時撐住血氧，但可逆的原因還沒處理。通知醫師之前，應該先抽痰、檢查管路。","effect":{"vent":{"FiO2":100},"vitals":{"SpO2":93}}},
-       {"text":"把 high pressure 警報上限調到 50","score":0,
-        "fb":"調高警報上限不算處置，氣道壓過高還是可能造成氣壓傷。","effect":{}}
-     ],
-     "real":"實際處置：抽出大量黃稠痰，PIP 回到 31、SpO2 95%。",
-     "teach":"PIP 升高而 Pplat 沒變，是阻力問題；兩個一起升高，是順應性問題。"},
-
-    {"id":"e2","t":"19:40","bed":"A2","caller":"護理師","timeout":20,
-     "msg":"A2 的 ABG 出來了，你看一下要不要調。",
-     "state":{"vitals":{"HR":112,"RRtotal":20},"abg":{"pH":7.25,"PaCO2":70,"PaO2":72,"HCO3":30,"SaO2":93},"wave":"autopeep",
-              "extra":{"Total PEEP":13,"Auto-PEEP":8}},
-     "finding":"吐氣末暫停（expiratory hold）量到 total PEEP 13（設定 5），auto-PEEP 8。流量波形在下一口氣開始前沒有回到零。聽診有 wheezing。",
-     "question":"COPD 急性惡化，PaCO2 70、auto-PEEP 8，你怎麼調？",
-     "options":[
-       {"text":"RR 從 14 調到 24，加快排出 CO2","score":1,
-        "fb":"RR 提高後吐氣時間更短，air trapping 會更嚴重，auto-PEEP 上升，還可能讓血壓下降。","effect":{"vent":{"RR":24,"PIP":40}}},
-       {"text":"提高吸氣流速、縮短 Ti，讓吐氣時間變長，並請醫師加開支氣管擴張劑","score":10,
-        "fb":"處理 auto-PEEP 的關鍵是延長吐氣時間、降低氣道阻力。Ti 從 1.2 秒縮到 0.8 秒後，I:E 從 1:1.5 變成約 1:2.6。","effect":{"vent":{"Ti":0.8,"PIP":36}}},
-       {"text":"PEEP 從 5 直接調到 15","score":3,
-        "fb":"外加 PEEP 可以降低觸發功，但一般設在 auto-PEEP 的 80% 以內，約 6。直接調到 15 已經超過 total PEEP，會加重肺過度充氣。","effect":{"vent":{"PEEP":15,"PIP":42}}},
-       {"text":"VT 調大到 600","score":1,
-        "fb":"VT 加大後要吐的氣更多，air trapping 跟著惡化，平台壓也會上升。","effect":{"vent":{"VT":600,"PIP":44,"Pplat":30}}}
-     ],
-     "followup":{"delay":120,"caller":"護理師",
-        "good":"A2 複驗 ABG：pH 7.31、PaCO2 60，auto-PEEP 降到 3，病人比較不喘了。",
-        "bad":"A2 複驗 ABG：pH 7.21、PaCO2 78，血壓掉到 92/54，醫師在問剛剛怎麼調的。"},
-     "real":"實際處置：縮短 Ti、加開 Berodual，2 小時後 PaCO2 降到 61。",
-     "teach":"阻塞性肺病的 CO2 滯留，不能單靠提高 RR 來排；要先確認吐氣時間夠不夠。"},
-
-    {"id":"e3","t":"22:30","bed":"A3","caller":"護理師","timeout":10,
-     "msg":"A3 很喘，HFNC 50 L/min、FiO2 我已經調到 60% 了，SpO2 還是只有 86%，RR 38，有在用輔助肌。",
-     "state":{"hfnc":{"Flow":50,"FiO2":60},"vitals":{"SpO2":86,"RRtotal":38,"HR":124,"BP":"148/86"}},
-     "finding":"意識清楚但煩躁、講話斷斷續續。雙下肺有濕囉音。今早 09:00 拔管，HFNC 使用約 13 小時。",
-     "question":"算一下 ROX index，下一步怎麼做？",
-     "options":[
-       {"text":"FiO2 再加到 80%，觀察一小時","score":2,
-        "fb":"ROX =（SpO2 / FiO2）/ RR =（86 / 0.6）/ 38 ≈ 3.77，低於 3.85，HFNC 失敗風險高。延遲插管和死亡率上升有關。"},
-       {"text":"改用 BiPAP 試試看","score":4,
-        "fb":"拔管後已經發生呼吸衰竭，這時才用 NIV 救援，可能延誤插管（COPD 或高碳酸血症的病人另當別論）。這位是肺水腫，NIV 不是不行，但 ROX 已經這麼低，必須同時通知醫師。"},
-       {"text":"立即通知醫師評估重新插管，同時準備插管用物和 Ambu","score":10,
-        "fb":"ROX ≈ 3.77（< 3.85），加上明顯呼吸費力，符合 HFNC 失敗。及早插管比硬撐安全。",
-        "effect":{"device":"MV","airway":"Oral 7.5 # / 22 cm","vent":{"mode":"VC-AC","VT":420,"RR":16,"FiO2":60,"PEEP":8,"PIP":28,"Pplat":20},"vitals":{"SpO2":96,"RRtotal":16,"HR":104}}},
-       {"text":"在 HFNC 外面再加一個非再吸入面罩","score":1,
-        "fb":"HFNC 的流量已經超過病人的吸氣流量，再加面罩幫助有限，也沒有處理呼吸衰竭本身。"}
-     ],
-     "real":"實際處置：值班醫師評估後 22:50 重新插管，接 VC-AC。",
-     "teach":"ROX = (SpO2/FiO2)/RR。使用 HFNC 2、6、12 小時時，若 < 3.85 要積極考慮插管。"},
-
-    {"id":"e4","t":"01:10","bed":"A4","caller":"護理師","timeout":15,
-     "msg":"A4 呼吸器一直叫 low VTe，喉嚨那邊聽得到漏氣聲，病人還可以發出聲音。",
-     "state":{"vent":{"VT":160},"vitals":{"SpO2":93,"RRtotal":28},"alarm":"VTe 過低","wave":"leak",
-              "extra":{"VTi":420,"VTe":160}},
-     "finding":"氣切套管固定帶完好、位置正常。用 cuff 壓力計量到 12 cmH2O。口腔有少量分泌物。",
-     "question":"VTi 420、VTe 160，病人可以發聲，最可能的原因和處置是？",
-     "options":[
-       {"text":"cuff 壓力補到 25–30 cmH2O，確認套管位置","score":10,
-        "fb":"吸入和吐出的潮氣量差很多，加上可以發聲，代表氣體從 cuff 旁邊漏掉。cuff 壓力 12 太低，補到 28 後 VTe 回到 400。",
-        "effect":{"vent":{"VT":410},"vitals":{"SpO2":97,"RRtotal":20}}},
-       {"text":"PS 從 10 調到 18","score":1,"fb":"加大壓力只會漏得更多，cuff 漏氣的問題還在。"},
-       {"text":"先抽痰","score":4,"fb":"清口腔分泌物是好習慣，但抽痰解決不了 cuff 漏氣。"},
-       {"text":"立刻換一支新的氣切套管","score":3,"fb":"cuff 只是消氣的話，不需要換管。補氣後仍持續漏氣，才要懷疑 cuff 破損。"}
-     ],
-     "real":"實際處置：cuff 壓力 12 → 補到 28 cmH2O，VTe 回到 400。",
-     "teach":"cuff 壓力建議維持 25–30 cmH2O，每班至少量一次。"},
-
-    {"id":"e5","t":"03:40","bed":"A1","caller":"護理師","timeout":5,
-     "msg":"A1 SpO2 突然掉到 84%，血壓 84/50，呼吸器又在叫！",
-     "state":{"vent":{"PIP":40,"Pplat":36},"vitals":{"SpO2":84,"BP":"84/50","HR":132},"alarm":"Paw 過高","wave":"stiff"},
-     "finding":"右側呼吸音明顯減弱，左側正常。氣管內管刻度 22 cm 沒有移位。抽痰管可以順利通過，痰量少。",
-     "question":"Peak 40、Plateau 36 一起上升，右側呼吸音減弱，血壓下降。你怎麼做？",
-     "options":[
-       {"text":"再抽一次痰","score":3,
-        "fb":"Peak 和 Plateau 一起上升，問題在肺順應性，不是氣道阻力。抽痰管已經能順利通過，管路阻塞可以排除，不能停在這一步。"},
-       {"text":"PEEP 從 12 加到 16，先改善氧合","score":0,
-        "fb":"如果是氣胸，加 PEEP 會讓張力性氣胸更嚴重，血壓會更低。"},
-       {"text":"移除呼吸器改用 Ambu 100% 手壓，立即通知醫師，安排床邊 CXR、準備胸管","score":10,
-        "fb":"DOPE：Displacement（移位）、Obstruction（阻塞）、Pneumothorax（氣胸）、Equipment（設備）。管位正常、管路通暢，加上單側呼吸音減弱和低血壓，要高度懷疑張力性氣胸。",
-        "effect":{"vent":{"PIP":31,"Pplat":26,"FiO2":80},"vitals":{"SpO2":93,"BP":"108/62","HR":110}}},
-       {"text":"VT 調降到 300，等醫師早上查房","score":1,"fb":"這是急症，不能等查房。"}
-     ],
-     "real":"實際處置：床邊 CXR 顯示右側氣胸，醫師置放胸管後 PIP 回到 31。（PEEP 12 下發生的醫源性氣胸）",
-     "teach":"呼吸器病人突然惡化，先拔離呼吸器用 Ambu 手壓，再照 DOPE 逐項排除。"},
-
-    {"id":"e6","t":"06:10","bed":"A4","caller":"醫師","timeout":20,
-     "msg":"A4 今天想試脫離，你看可以開始 trach collar trial 嗎？",
-     "state":{"vent":{"mode":"CPAP","PS":0,"VT":360,"RR":22},"vitals":{"SpO2":96,"RRtotal":22,"HR":88},
-              "extra":{"RSBI":61}},
-     "finding":"剛剛 CPAP 5、PS 0 量了 1 分鐘：RR 22、VT 360 mL。意識清醒，沒有使用升壓劑，FiO2 30%、PEEP 5，Hb 10.2。",
-     "question":"RSBI 多少？可以開始 trach collar trial 嗎？",
-     "options":[
-       {"text":"RSBI = 22 / 0.36 ≈ 61，小於 105，條件符合，開始 trach collar trial，2 小時後評估","score":10,
-        "fb":"RSBI < 105，加上 FiO2 ≤ 40%、PEEP ≤ 8、血行動力穩定，符合脫離嘗試的條件。",
-        "effect":{"device":"Trach collar","vent":{"mode":"Trach collar","FiO2":35}}},
-       {"text":"RSBI 太高，維持 PSV","score":2,"fb":"RSBI 61 其實在可接受範圍內，再拖只會延長呼吸器天數。"},
-       {"text":"先把 PS 降到 5，觀察一天再說","score":4,"fb":"這樣不算錯，但病人已經符合脫離條件，可以直接嘗試。"},
-       {"text":"要等 ABG 完全正常才可以","score":3,"fb":"脫離評估不需要 ABG 完全正常，長期呼吸器病人可以接受自己平時的基準值。"}
-     ],
-     "real":"實際處置：06:30 開始 trach collar 35%，2 小時後耐受良好。",
-     "teach":"RSBI = RR / VT(L)，< 105 預測脫離成功。要在 CPAP / T-piece 下測量，不能在 PSV 下量。"}
-  ]
+ "id": "demo_001",
+ "title": "示範案例（虛構）",
+ "unit": "內科加護病房",
+ "start": "16:00",
+ "end": "08:00",
+ "beds": [
+  {
+   "bed": "A1",
+   "age": "70–79",
+   "sex": "男",
+   "dx": "肺炎併 ARDS",
+   "device": "MV",
+   "airway": "Oral 7.5 # / 22 cm",
+   "admitDay": 4,
+   "vent": {
+    "mode": "VC-AC",
+    "VT": 400,
+    "RR": 18,
+    "FiO2": 60,
+    "PEEP": 12,
+    "PIP": 30,
+    "Pplat": 24
+   },
+   "vitals": {
+    "HR": 96,
+    "BP": "118/66",
+    "SpO2": 94,
+    "RRtotal": 18
+   },
+   "note": "痰多黃稠，q2h 抽痰。FiO2 ≥ 60%、PEEP ≥ 10。"
+  },
+  {
+   "bed": "A2",
+   "age": "60–69",
+   "sex": "女",
+   "dx": "COPD 急性惡化",
+   "device": "MV",
+   "airway": "Oral 7.0 # / 21 cm",
+   "admitDay": 2,
+   "vent": {
+    "mode": "VC-AC",
+    "VT": 450,
+    "RR": 14,
+    "FiO2": 35,
+    "PEEP": 5,
+    "PIP": 34,
+    "Pplat": 22,
+    "Ti": 1.2
+   },
+   "vitals": {
+    "HR": 108,
+    "BP": "132/78",
+    "SpO2": 93,
+    "RRtotal": 20
+   },
+   "note": "晚上 19:00 抽 ABG。Berodual INHL q6h。"
+  },
+  {
+   "bed": "A3",
+   "age": "80–89",
+   "sex": "男",
+   "dx": "心衰竭肺水腫，今早拔管",
+   "device": "HFNC",
+   "airway": "無（今 09:00 拔管）",
+   "admitDay": 6,
+   "hfnc": {
+    "Flow": 50,
+    "FiO2": 40
+   },
+   "vitals": {
+    "HR": 102,
+    "BP": "126/70",
+    "SpO2": 95,
+    "RRtotal": 26
+   },
+   "note": "拔管後第一天，注意喘。"
+  },
+  {
+   "bed": "A4",
+   "age": "50–59",
+   "sex": "男",
+   "dx": "腦中風術後，長期呼吸器",
+   "device": "MV",
+   "airway": "Tr 8.0 #",
+   "admitDay": 23,
+   "vent": {
+    "mode": "PSV",
+    "PS": 10,
+    "PEEP": 5,
+    "FiO2": 30,
+    "VT": 420,
+    "RR": 20
+   },
+   "vitals": {
+    "HR": 84,
+    "BP": "128/72",
+    "SpO2": 97,
+    "RRtotal": 20
+   },
+   "note": "脫離中，明早評估 trach collar。"
+  }
+ ],
+ "events": [
+  {
+   "id": "e1",
+   "t": "18:20",
+   "bed": "A1",
+   "caller": "護理師",
+   "timeout": 15,
+   "msg": "A1 呼吸器一直叫 high pressure，病人咳得很厲害，SpO2 掉到 88%。",
+   "state": {
+    "vent": {
+     "PIP": 42,
+     "Pplat": 24
+    },
+    "vitals": {
+     "SpO2": 88,
+     "HR": 118
+    },
+    "alarm": "Paw 過高",
+    "wave": "resist"
+   },
+   "finding": "聽診：雙側粗囉音。管路內可見黃稠痰。管路沒有扭折，病人沒有咬管。",
+   "question": "Peak 42、Plateau 24，你第一步要做什麼？",
+   "options": [
+    {
+     "text": "抽痰，同時檢查管路有沒有扭折或積水",
+     "score": 10,
+     "fb": "PIP 和 Pplat 差了 18 cmH2O，表示氣道阻力上升，例如痰、管路扭折、咬管或支氣管痙攣；肺順應性變化不大。抽出大量黃稠痰後，PIP 降回 31。",
+     "effect": {
+      "vent": {
+       "PIP": 31,
+       "Pplat": 23
+      },
+      "vitals": {
+       "SpO2": 95,
+       "HR": 98
+      }
+     }
+    },
+    {
+     "text": "VT 從 400 降到 300，讓警報停下來",
+     "score": 2,
+     "fb": "降 VT 能讓壓力下降，但通氣也會跟著不足，造成阻力的痰還在。",
+     "effect": {
+      "vent": {
+       "VT": 300,
+       "PIP": 36
+      },
+      "vitals": {
+       "SpO2": 89
+      }
+     }
+    },
+    {
+     "text": "FiO2 調到 100%，然後通知醫師",
+     "score": 5,
+     "fb": "提高 FiO2 能暫時撐住血氧，但可逆的原因還沒處理。通知醫師之前，應該先抽痰、檢查管路。",
+     "effect": {
+      "vent": {
+       "FiO2": 100
+      },
+      "vitals": {
+       "SpO2": 93
+      }
+     }
+    },
+    {
+     "text": "把 high pressure 警報上限調到 50",
+     "score": 0,
+     "fb": "調高警報上限不算處置，氣道壓過高還是可能造成氣壓傷。",
+     "effect": {}
+    }
+   ],
+   "real": "實際處置：抽出大量黃稠痰，PIP 回到 31、SpO2 95%。",
+   "teach": "PIP 升高而 Pplat 沒變，是阻力問題；兩個一起升高，是順應性問題。",
+   "crash": 45
+  },
+  {
+   "id": "e2",
+   "t": "19:40",
+   "bed": "A2",
+   "caller": "護理師",
+   "timeout": 20,
+   "msg": "A2 的 ABG 出來了，你看一下要不要調。",
+   "state": {
+    "vitals": {
+     "HR": 112,
+     "RRtotal": 20
+    },
+    "abg": {
+     "pH": 7.25,
+     "PaCO2": 70,
+     "PaO2": 72,
+     "HCO3": 30,
+     "SaO2": 93
+    },
+    "wave": "autopeep",
+    "extra": {
+     "Total PEEP": 13,
+     "Auto-PEEP": 8
+    }
+   },
+   "finding": "吐氣末暫停（expiratory hold）量到 total PEEP 13（設定 5），auto-PEEP 8。流量波形在下一口氣開始前沒有回到零。聽診有 wheezing。",
+   "question": "COPD 急性惡化，PaCO2 70、auto-PEEP 8，你怎麼調？",
+   "options": [
+    {
+     "text": "RR 從 14 調到 24，加快排出 CO2",
+     "score": 1,
+     "fb": "RR 提高後吐氣時間更短，air trapping 會更嚴重，auto-PEEP 上升，還可能讓血壓下降。",
+     "effect": {
+      "vent": {
+       "RR": 24,
+       "PIP": 40
+      }
+     }
+    },
+    {
+     "text": "提高吸氣流速、縮短 Ti，讓吐氣時間變長，並請醫師加開支氣管擴張劑",
+     "score": 10,
+     "fb": "處理 auto-PEEP 的關鍵是延長吐氣時間、降低氣道阻力。Ti 從 1.2 秒縮到 0.8 秒後，I:E 從 1:1.5 變成約 1:2.6。",
+     "effect": {
+      "vent": {
+       "Ti": 0.8,
+       "PIP": 36
+      }
+     }
+    },
+    {
+     "text": "PEEP 從 5 直接調到 15",
+     "score": 3,
+     "fb": "外加 PEEP 可以降低觸發功，但一般設在 auto-PEEP 的 80% 以內，約 6。直接調到 15 已經超過 total PEEP，會加重肺過度充氣。",
+     "effect": {
+      "vent": {
+       "PEEP": 15,
+       "PIP": 42
+      }
+     }
+    },
+    {
+     "text": "VT 調大到 600",
+     "score": 1,
+     "fb": "VT 加大後要吐的氣更多，air trapping 跟著惡化，平台壓也會上升。",
+     "effect": {
+      "vent": {
+       "VT": 600,
+       "PIP": 44,
+       "Pplat": 30
+      }
+     }
+    }
+   ],
+   "followup": {
+    "delay": 120,
+    "caller": "護理師",
+    "good": "A2 複驗 ABG：pH 7.31、PaCO2 60，auto-PEEP 降到 3，病人比較不喘了。",
+    "bad": "A2 複驗 ABG：pH 7.21、PaCO2 78，血壓掉到 92/54，醫師在問剛剛怎麼調的。"
+   },
+   "real": "實際處置：縮短 Ti、加開 Berodual，2 小時後 PaCO2 降到 61。",
+   "teach": "阻塞性肺病的 CO2 滯留，不能單靠提高 RR 來排；要先確認吐氣時間夠不夠。",
+   "crash": 0
+  },
+  {
+   "id": "e3",
+   "t": "22:30",
+   "bed": "A3",
+   "caller": "護理師",
+   "timeout": 10,
+   "msg": "A3 很喘，HFNC 50 L/min、FiO2 我已經調到 60% 了，SpO2 還是只有 86%，RR 38，有在用輔助肌。",
+   "state": {
+    "hfnc": {
+     "Flow": 50,
+     "FiO2": 60
+    },
+    "vitals": {
+     "SpO2": 86,
+     "RRtotal": 38,
+     "HR": 124,
+     "BP": "148/86"
+    }
+   },
+   "finding": "意識清楚但煩躁、講話斷斷續續。雙下肺有濕囉音。今早 09:00 拔管，HFNC 使用約 13 小時。",
+   "question": "算一下 ROX index，下一步怎麼做？",
+   "options": [
+    {
+     "text": "FiO2 再加到 80%，觀察一小時",
+     "score": 2,
+     "fb": "ROX =（SpO2 / FiO2）/ RR =（86 / 0.6）/ 38 ≈ 3.77，低於 3.85，HFNC 失敗風險高。延遲插管和死亡率上升有關。"
+    },
+    {
+     "text": "改用 BiPAP 試試看",
+     "score": 4,
+     "fb": "拔管後已經發生呼吸衰竭，這時才用 NIV 救援，可能延誤插管（COPD 或高碳酸血症的病人另當別論）。這位是肺水腫，NIV 不是不行，但 ROX 已經這麼低，必須同時通知醫師。"
+    },
+    {
+     "text": "立即通知醫師評估重新插管，同時準備插管用物和 Ambu",
+     "score": 10,
+     "fb": "ROX ≈ 3.77（< 3.85），加上明顯呼吸費力，符合 HFNC 失敗。及早插管比硬撐安全。",
+     "effect": {
+      "device": "MV",
+      "airway": "Oral 7.5 # / 22 cm",
+      "vent": {
+       "mode": "VC-AC",
+       "VT": 420,
+       "RR": 16,
+       "FiO2": 60,
+       "PEEP": 8,
+       "PIP": 28,
+       "Pplat": 20
+      },
+      "vitals": {
+       "SpO2": 96,
+       "RRtotal": 16,
+       "HR": 104
+      }
+     }
+    },
+    {
+     "text": "在 HFNC 外面再加一個非再吸入面罩",
+     "score": 1,
+     "fb": "HFNC 的流量已經超過病人的吸氣流量，再加面罩幫助有限，也沒有處理呼吸衰竭本身。"
+    }
+   ],
+   "real": "實際處置：值班醫師評估後 22:50 重新插管，接 VC-AC。",
+   "teach": "ROX = (SpO2/FiO2)/RR。使用 HFNC 2、6、12 小時時，若 < 3.85 要積極考慮插管。",
+   "crash": 35
+  },
+  {
+   "id": "e4",
+   "t": "01:10",
+   "bed": "A4",
+   "caller": "護理師",
+   "timeout": 15,
+   "msg": "A4 呼吸器一直叫 low VTe，喉嚨那邊聽得到漏氣聲，病人還可以發出聲音。",
+   "state": {
+    "vent": {
+     "VT": 160
+    },
+    "vitals": {
+     "SpO2": 93,
+     "RRtotal": 28
+    },
+    "alarm": "VTe 過低",
+    "wave": "leak",
+    "extra": {
+     "VTi": 420,
+     "VTe": 160
+    }
+   },
+   "finding": "氣切套管固定帶完好、位置正常。用 cuff 壓力計量到 12 cmH2O。口腔有少量分泌物。",
+   "question": "VTi 420、VTe 160，病人可以發聲，最可能的原因和處置是？",
+   "options": [
+    {
+     "text": "cuff 壓力補到 25–30 cmH2O，確認套管位置",
+     "score": 10,
+     "fb": "吸入和吐出的潮氣量差很多，加上可以發聲，代表氣體從 cuff 旁邊漏掉。cuff 壓力 12 太低，補到 28 後 VTe 回到 400。",
+     "effect": {
+      "vent": {
+       "VT": 410
+      },
+      "vitals": {
+       "SpO2": 97,
+       "RRtotal": 20
+      }
+     }
+    },
+    {
+     "text": "PS 從 10 調到 18",
+     "score": 1,
+     "fb": "加大壓力只會漏得更多，cuff 漏氣的問題還在。"
+    },
+    {
+     "text": "先抽痰",
+     "score": 4,
+     "fb": "清口腔分泌物是好習慣，但抽痰解決不了 cuff 漏氣。"
+    },
+    {
+     "text": "立刻換一支新的氣切套管",
+     "score": 3,
+     "fb": "cuff 只是消氣的話，不需要換管。補氣後仍持續漏氣，才要懷疑 cuff 破損。"
+    }
+   ],
+   "real": "實際處置：cuff 壓力 12 → 補到 28 cmH2O，VTe 回到 400。",
+   "teach": "cuff 壓力建議維持 25–30 cmH2O，每班至少量一次。",
+   "crash": 0
+  },
+  {
+   "id": "e5",
+   "t": "03:40",
+   "bed": "A1",
+   "caller": "護理師",
+   "timeout": 5,
+   "msg": "A1 SpO2 突然掉到 84%，血壓 84/50，呼吸器又在叫！快來！",
+   "state": {
+    "vent": {
+     "PIP": 40,
+     "Pplat": 36
+    },
+    "vitals": {
+     "SpO2": 84,
+     "BP": "84/50",
+     "HR": 132
+    },
+    "alarm": "Paw 過高",
+    "wave": "stiff"
+   },
+   "finding": "右側呼吸音明顯減弱，左側正常。氣管內管刻度 22 cm 沒有移位。抽痰管可以順利通過，痰量少。",
+   "question": "Peak 40、Plateau 36 一起上升，右側呼吸音減弱，血壓下降。你怎麼做？",
+   "options": [
+    {
+     "text": "再抽一次痰",
+     "score": 3,
+     "fb": "Peak 和 Plateau 一起上升，問題在肺順應性，不是氣道阻力。抽痰管已經能順利通過，管路阻塞可以排除，不能停在這一步。"
+    },
+    {
+     "text": "PEEP 從 12 加到 16，先改善氧合",
+     "score": 0,
+     "fb": "如果是氣胸，加 PEEP 會讓張力性氣胸更嚴重，血壓會更低。"
+    },
+    {
+     "text": "移除呼吸器改用 Ambu 100% 手壓，立即通知醫師，安排床邊 CXR、準備胸管",
+     "score": 10,
+     "fb": "DOPE：Displacement（移位）、Obstruction（阻塞）、Pneumothorax（氣胸）、Equipment（設備）。管位正常、管路通暢，加上單側呼吸音減弱和低血壓，要高度懷疑張力性氣胸。",
+     "effect": {
+      "vent": {
+       "PIP": 31,
+       "Pplat": 26,
+       "FiO2": 80
+      },
+      "vitals": {
+       "SpO2": 93,
+       "BP": "108/62",
+       "HR": 110
+      }
+     }
+    },
+    {
+     "text": "VT 調降到 300，等醫師早上查房",
+     "score": 1,
+     "fb": "這是急症，不能等查房。"
+    }
+   ],
+   "real": "實際處置：床邊 CXR 顯示右側氣胸，醫師置放胸管後 PIP 回到 31。（PEEP 12 下發生的醫源性氣胸）",
+   "teach": "呼吸器病人突然惡化，先拔離呼吸器用 Ambu 手壓，再照 DOPE 逐項排除。",
+   "crash": 20
+  },
+  {
+   "id": "e7",
+   "t": "03:32",
+   "bed": "A2",
+   "caller": "護理師",
+   "timeout": 20,
+   "crash": 0,
+   "msg": "A2 有點喘，SpO2 92%，想問 Berodual 可以提早給嗎？不急，你有空再來。",
+   "state": {
+    "vitals": {
+     "SpO2": 92,
+     "RRtotal": 24,
+     "HR": 110
+    }
+   },
+   "finding": "聽診兩側 wheezing，比剛才多。呼吸器設定沒變，Ppeak 36。上一劑 Berodual 是 22:00。",
+   "question": "距離上一劑約 5.5 小時，病人有 wheezing，你怎麼處理？",
+   "options": [
+    {
+     "text": "評估後聯絡醫師，請醫師開立 PRN 或提早給藥，給藥後再評估",
+     "score": 10,
+     "fb": "提早給藥需要醫囑。評估、聯絡醫師、給藥後再看 Ppeak 和呼吸音，流程正確。",
+     "effect": {
+      "vitals": {
+       "SpO2": 95,
+       "RRtotal": 20
+      },
+      "vent": {
+       "PIP": 33
+      }
+     }
+    },
+    {
+     "text": "自己先提早給，反正只差半小時",
+     "score": 3,
+     "fb": "差半小時也是醫囑以外的給藥，要先跟醫師確認或依 PRN 醫囑。"
+    },
+    {
+     "text": "請護理師等到時間再說",
+     "score": 4,
+     "fb": "可以，但病人已經在喘，應該先評估並跟醫師討論是否需要 PRN。"
+    },
+    {
+     "text": "把 FiO2 調高到 50% 就好",
+     "score": 2,
+     "fb": "支氣管痙攣是阻力問題，提高 FiO2 只能遮住症狀。"
+    }
+   ],
+   "real": "實際處置：聯絡醫師加開 PRN，給藥後 Ppeak 降到 33。",
+   "teach": "兩通電話同時來時，先處理會危及生命的那床（A1 氣胸），這床可以晚點再去。"
+  },
+  {
+   "id": "e6",
+   "t": "06:10",
+   "bed": "A4",
+   "caller": "醫師",
+   "timeout": 20,
+   "msg": "A4 今天想試脫離，你看可以開始 trach collar trial 嗎？",
+   "state": {
+    "vent": {
+     "mode": "CPAP",
+     "PS": 0,
+     "VT": 360,
+     "RR": 22
+    },
+    "vitals": {
+     "SpO2": 96,
+     "RRtotal": 22,
+     "HR": 88
+    },
+    "extra": {
+     "RSBI": 61
+    }
+   },
+   "finding": "剛剛 CPAP 5、PS 0 量了 1 分鐘：RR 22、VT 360 mL。意識清醒，沒有使用升壓劑，FiO2 30%、PEEP 5，Hb 10.2。",
+   "question": "RSBI 多少？可以開始 trach collar trial 嗎？",
+   "options": [
+    {
+     "text": "RSBI = 22 / 0.36 ≈ 61，小於 105，條件符合，開始 trach collar trial，2 小時後評估",
+     "score": 10,
+     "fb": "RSBI < 105，加上 FiO2 ≤ 40%、PEEP ≤ 8、血行動力穩定，符合脫離嘗試的條件。",
+     "effect": {
+      "device": "Trach collar",
+      "vent": {
+       "mode": "Trach collar",
+       "FiO2": 35
+      }
+     }
+    },
+    {
+     "text": "RSBI 太高，維持 PSV",
+     "score": 2,
+     "fb": "RSBI 61 其實在可接受範圍內，再拖只會延長呼吸器天數。"
+    },
+    {
+     "text": "先把 PS 降到 5，觀察一天再說",
+     "score": 4,
+     "fb": "這樣不算錯，但病人已經符合脫離條件，可以直接嘗試。"
+    },
+    {
+     "text": "要等 ABG 完全正常才可以",
+     "score": 3,
+     "fb": "脫離評估不需要 ABG 完全正常，長期呼吸器病人可以接受自己平時的基準值。"
+    }
+   ],
+   "real": "實際處置：06:30 開始 trach collar 35%，2 小時後耐受良好。",
+   "teach": "RSBI = RR / VT(L)，< 105 預測脫離成功。要在 CPAP / T-piece 下測量，不能在 PSV 下量。",
+   "crash": 0
+  }
+ ]
 }
 </script>
 
@@ -269,140 +692,350 @@ td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:n
 const CASE = JSON.parse(document.getElementById('caseData').textContent);
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hm = s => { const [h,m] = s.split(':').map(Number); return h*60+m; };
 const START = hm(CASE.start), LEN = ((hm(CASE.end) - START) + 1440) % 1440 || 1440;
-function hm(s){ const [h,m] = s.split(':').map(Number); return h*60+m; }
-function rel(s){ return (hm(s) - START + 1440) % 1440; }          // 從開班起算的分鐘
-function clockStr(t){ const m = (START + Math.floor(t)) % 1440; return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+const rel = s => (hm(s) - START + 1440) % 1440;
+const clockStr = t => { const m = (START + Math.floor(t)) % 1440; return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); };
 const clone = o => JSON.parse(JSON.stringify(o));
 const MAX = CASE.events.reduce((s,e)=>s+Math.max(...e.options.map(o=>o.score)),0);
 
+// ---------- 地圖 ----------
+const TS = 32;
+const MAP = [
+  "##########################",
+  "#.BB.V|.BB.V|.BB.V|.BB.V.#",
+  "#.BB.V|.BB.V|.BB.V|.BB.V.#",
+  "#.....|.....|.....|......#",
+  "#........................#",
+  "#........................#",
+  "#........................#",
+  "#........................#",
+  "#.........DDDDDDDD.......#",
+  "#.........DDDDDDDD.......#",
+  "#........................#",
+  "#ww.www............www.ww#",
+  "#rr....w..........w....tt#",
+  "#rr....w..........w....tt#",
+  "##########################"];
+const MW = MAP[0].length, MH = MAP.length;
+const solid = (x,y) => { if(x<0||y<0||x>=MW||y>=MH) return true; return MAP[y][x] !== '.'; };
+const BEDPOS = CASE.beds.map((b,i)=>({bed:b.bed, x:1+6*i+1.5, y:3.5, tx:1+6*i+1, ty:3}));
+const ZONES = [
+  ...BEDPOS.map(p=>({kind:'bed', bed:p.bed, x:p.x, y:p.y, r:1.6, label:'查看 '+p.bed, tx:p.tx, ty:p.ty})),
+  {kind:'rest', x:3.5, y:12.8, r:1.8, label:'在值班室躺一下', tx:3, ty:12},
+  {kind:'eat', x:22.5, y:12.8, r:1.8, label:'吃晚餐', tx:22, ty:12}
+];
+
+const cv = $('map'), ctx = cv.getContext('2d');
+function sizeCanvas(){ const d = Math.min(2, window.devicePixelRatio||1); cv.width = MW*TS*d; cv.height = MH*TS*d; ctx.setTransform(d,0,0,d,0,0); }
+sizeCanvas();
+
+// ---------- 狀態 ----------
 let S;
 function reset(){
-  S = { t:0, running:false, started:false, over:false, speed:1, energy:100, score:0, resting:false,
+  S = { t:0, running:false, started:false, over:false, speed:1, energy:100, hunger:30, score:0,
+        busy:null, // {kind:'rest'|'eat', until}
         beds: Object.fromEntries(CASE.beds.map(b=>[b.bed, clone(b)])),
         pending: CASE.events.map(e=>({...e, at: rel(e.t), kind:'q'})).sort((a,b)=>a.at-b.at),
-        ringing: [], active:null, done:[], log:[], selBed: CASE.beds[0].bed, view:'handover', fb:null };
+        ringing: [], active:null, done:[], log:[], fb:null, overlay:'handover', viewBed:null, codes:0,
+        p:{x:13.5, y:10.5, dir:1, moving:false, phase:0, path:null, auto:null},
+        nurses:[{x:4.5,y:5,path:null,wait:0,phase:0,home:[0,1]},{x:17,y:6,path:null,wait:2,phase:0,home:[2,3]}] };
 }
 reset();
+const keys = {};
 
-// ---------- 時間 ----------
+// ---------- 主迴圈 ----------
 let last = performance.now();
-setInterval(()=>{
-  const now = performance.now(), dtReal = Math.min((now-last)/1000, 1); last = now;
-  if(!S.running || S.over) return;
-  const sp = S.resting ? 8 : S.speed;
-  const dt = dtReal * sp;                       // 1× = 每秒 1 分鐘
-  S.t += dt;
-  S.energy += S.resting ? dt*0.4 : -dt*0.055;
+function frame(now){
+  const dt = Math.min((now-last)/1000, 0.1); last = now;
+  if(S.running && !S.over) step(dt);
+  draw(now/1000);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+function step(dt){
+  const ovOpen = !!S.overlay;
+  let sp = S.speed;
+  if(S.busy) sp = 8;
+  if(ovOpen) sp = Math.min(sp, 1);
+  const gdt = dt * sp;               // 1× = 每秒 1 分鐘
+  S.t += gdt;
+  const running = !ovOpen && !S.busy && moveKeys(dt);
+  S.hunger = Math.min(100, S.hunger + gdt*0.07);
+  let drain = 0.05 * (S.hunger > 85 ? 2 : 1) * (running ? 6 : 1);
+  if(S.busy && S.busy.kind==='rest') S.energy += gdt*0.45; else S.energy -= gdt*drain;
+  if(S.busy && S.busy.kind==='eat') S.hunger = Math.max(0, S.hunger - gdt*5);
   S.energy = Math.max(0, Math.min(100, S.energy));
+  if(S.busy && (S.t >= S.busy.until || (S.busy.kind==='rest' && S.energy>=100))){ addLog(clockStr(S.t)+' '+(S.busy.kind==='rest'?'起來了，精神好一點。':'吃飽了。')); S.busy = null; }
+  if(!ovOpen && !S.busy) followPath(S.p, dt*(keys.Shift?7:4), true);
+  stepNurses(dt);
   checkEvents();
   if(S.energy <= 0){ endShift('累倒了：精力歸零，今晚提前結束。'); return; }
   if(S.t >= LEN){ S.t = LEN; endShift('08:00 交班。'); return; }
   renderBar();
-}, 250);
+}
 
+function moveKeys(dt){
+  let dx = (keys.ArrowRight||keys.d?1:0) - (keys.ArrowLeft||keys.a?1:0);
+  let dy = (keys.ArrowDown||keys.s?1:0) - (keys.ArrowUp||keys.w?1:0);
+  const p = S.p;
+  if(!dx && !dy){ if(!p.path) p.moving = false; return !!(p.path && keys.Shift); }
+  p.path = null; p.auto = null;
+  const run = !!keys.Shift && S.energy > 20;
+  const v = (run?7:4) * dt, n = Math.hypot(dx,dy);
+  tryMove(p, dx/n*v, dy/n*v);
+  p.moving = true; p.phase += dt*(run?14:9);
+  if(dx) p.dir = dx;
+  return run;
+}
+function tryMove(o, dx, dy){
+  const r = 0.3;
+  const free = (x,y) => !solid(Math.floor(x-r),Math.floor(y-r)) && !solid(Math.floor(x+r),Math.floor(y-r)) && !solid(Math.floor(x-r),Math.floor(y+r)) && !solid(Math.floor(x+r),Math.floor(y+r));
+  if(free(o.x+dx, o.y)) o.x += dx;
+  if(free(o.x, o.y+dy)) o.y += dy;
+}
+function bfs(sx,sy,tx,ty){
+  sx=Math.floor(sx); sy=Math.floor(sy);
+  if(solid(tx,ty)) return null;
+  const prev = new Map(), k=(x,y)=>x+','+y, q=[[sx,sy]]; prev.set(k(sx,sy),null);
+  while(q.length){
+    const [x,y] = q.shift();
+    if(x===tx&&y===ty){ const path=[]; let c=k(x,y); while(c){ const [a,b]=c.split(',').map(Number); path.unshift({x:a+.5,y:b+.5}); c=prev.get(c);} return path; }
+    for(const [ax,ay] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+ax, ny=y+ay; if(!solid(nx,ny)&&!prev.has(k(nx,ny))){ prev.set(k(nx,ny),k(x,y)); q.push([nx,ny]); } }
+  }
+  return null;
+}
+function followPath(o, v, isPlayer){
+  if(!o.path || !o.path.length){ if(o.path){ o.path=null; if(isPlayer){ o.moving=false; if(o.auto){ const z=o.auto; o.auto=null; interact(z);} } } return; }
+  const tgt = o.path[0], dx = tgt.x-o.x, dy = tgt.y-o.y, d = Math.hypot(dx,dy);
+  if(d <= v){ o.x = tgt.x; o.y = tgt.y; o.path.shift(); }
+  else { o.x += dx/d*v; o.y += dy/d*v; if(Math.abs(dx)>0.01) o.dir = Math.sign(dx); }
+  o.moving = true; o.phase += v*2.4;
+}
+function stepNurses(dt){
+  S.nurses.forEach(n=>{
+    const callBed = S.ringing.find(e=>e.kind==='q' && n.home.includes(CASE.beds.findIndex(b=>b.bed===e.bed)));
+    if(callBed){
+      const bp = BEDPOS.find(b=>b.bed===callBed.bed);
+      if(!n.path && (Math.abs(n.x-(bp.tx+1.5))>0.1 || Math.abs(n.y-4.5)>0.1)) n.path = bfs(n.x,n.y,bp.tx+1,4);
+      n.call = callBed.bed;
+    } else n.call = null;
+    if(n.path){ followPath(n, dt*2.6, false); return; }
+    n.moving = false;
+    if(n.call) return;
+    n.wait -= dt;
+    if(n.wait <= 0){
+      const spots = [...n.home.map(i=>[BEDPOS[i].tx+2, 3]), [10,10],[16,10],[12,7],[9,5]];
+      const s = spots[Math.floor(Math.random()*spots.length)];
+      n.path = bfs(n.x,n.y,s[0],s[1]); n.wait = 3+Math.random()*5;
+    }
+  });
+}
+
+// ---------- 事件 ----------
 function checkEvents(){
   while(S.pending.length && S.pending[0].at <= S.t){
     const e = S.pending.shift();
     e.ringAt = e.at; S.ringing.push(e);
-    if(S.resting){ S.resting = false; addLog('電話把你從值班室叫醒。'); }
-    beep(); renderCall(); renderBeds();
+    if(e.kind==='q') ringState(e);
+    if(S.busy){ addLog(clockStr(S.t)+' 公務機響了，'+(S.busy.kind==='rest'?'從床上爬起來。':'放下筷子。')); S.busy = null; }
+    beep(e.crash?3:2); renderCalls();
   }
-  // 太久沒接，再打一次
-  S.ringing.forEach(e=>{ if(e.kind==='q' && !e.recall && S.t - e.ringAt > e.timeout*2){ e.recall = true; beep(); addLog(clockStr(S.t)+' '+e.bed+' 護理師第二次來電，語氣很急。'); renderCall(); }});
+  S.ringing.forEach(e=>{
+    if(e.kind!=='q') return;
+    const w = S.t - e.ringAt, b = S.beds[e.bed];
+    if(e.crash){ b.vitals.SpO2 = Math.max(62, Math.round(e.base - (e.base-68)*Math.min(1,w/e.crash))); }
+    if(!e.recall && w > e.timeout*2){ e.recall = true; beep(3); addLog(clockStr(S.t)+' '+e.bed+' 護理師又打來了，語氣很急。'); renderCalls(); }
+    if(e.crash && w > e.crash && !e.coded){ codeBlue(e); }
+  });
+  if(S.ringing.length) renderCalls();
 }
-
-// ---------- 事件處理 ----------
-function answer(e){
+function ringState(e){
+  const b = S.beds[e.bed], st = e.state||{};
+  if(st.vent) b.vent = {...(b.vent||{}), ...st.vent};
+  if(st.hfnc) b.hfnc = {...(b.hfnc||{}), ...st.hfnc};
+  if(st.vitals) b.vitals = {...b.vitals, ...st.vitals};
+  b.alarm = st.alarm || '護理師呼叫'; b.wave = st.wave || null; b.abg = st.abg || null; b.extra = st.extra || null;
+  e.base = b.vitals.SpO2;
+}
+function codeBlue(e){
+  e.coded = true; S.codes++;
   S.ringing = S.ringing.filter(x=>x!==e);
-  e.answerAt = S.t;
-  if(e.kind === 'info'){ addLog(clockStr(S.t)+' '+e.bed+' '+e.msg); applyEffect(e.bed, e.effect); renderAll(); return; }
-  S.active = e; S.selBed = e.bed; S.view = 'bed'; S.fb = null;
-  applyState(e.bed, e.state);
+  if(S.active===e){ S.active=null; }
+  const best = e.options.reduce((a,o)=>o.score>a.score?o:a);
+  applyEffect(e.bed, best.effect);
+  S.score = Math.max(0, S.score - 5);
+  S.done.push({e, o:null, delay:Math.round(S.t-e.ringAt), pen:5, got:-5, best:best.score, code:true});
+  addLog(clockStr(S.t)+' ⚠ '+e.bed+' Code Blue！值班醫師和其他 RT 衝進來急救（−5）。');
+  beep(5);
+}
+function interact(z){
+  if(!z || S.overlay || S.busy || !S.running) return;
+  if(z.kind==='bed'){
+    const e = S.ringing.find(x=>x.kind==='q' && x.bed===z.bed);
+    if(e){ S.ringing = S.ringing.filter(x=>x!==e); e.answerAt = S.t; S.active = e; S.fb = null; }
+    S.viewBed = z.bed; openOverlay('bed');
+  } else if(z.kind==='rest'){
+    if(S.energy > 85){ addLog('還不累，躺不下去。'); return; }
+    S.busy = {kind:'rest', until:S.t+120}; addLog(clockStr(S.t)+' 在值班室躺下。');
+  } else if(z.kind==='eat'){
+    if(S.hunger < 30){ addLog('還不餓。'); return; }
+    S.busy = {kind:'eat', until:S.t+20}; addLog(clockStr(S.t)+' 開始吃飯。');
+  }
   renderAll();
 }
+function nearZone(){ const p=S.p; let best=null, bd=1e9; ZONES.forEach(z=>{ const d=Math.hypot(z.x-p.x,z.y-p.y); if(d<z.r&&d<bd){bd=d;best=z;} }); return best; }
 function choose(i){
   const e = S.active, o = e.options[i];
   const delay = Math.max(0, Math.round(e.answerAt - e.ringAt));
-  const late = Math.max(0, delay - e.timeout);
-  const pen = Math.min(5, Math.ceil(late/10));
+  const pen = Math.min(5, Math.ceil(Math.max(0, delay - e.timeout)/10));
   const got = Math.max(0, o.score - pen);
-  S.score += got; S.energy = Math.max(0, S.energy - 6);
+  S.score += got; S.energy = Math.max(0, S.energy - 5);
   applyEffect(e.bed, o.effect);
   const best = Math.max(...e.options.map(x=>x.score));
   S.done.push({e, o, delay, pen, got, best});
   addLog(clockStr(S.t)+' '+e.bed+'：'+o.text+'（+'+got+'）');
-  if(e.followup){
-    const f = e.followup, good = o.score >= 8;
-    insertPending({ kind:'info', bed:e.bed, caller:f.caller, at:S.t + f.delay, msg: good ? f.good : f.bad, timeout:999 });
-  }
-  S.fb = {o, got, pen, delay, best, e};
-  S.active = null;
+  if(e.followup){ const f = e.followup, good = o.score >= 8;
+    S.pending.push({ kind:'info', bed:e.bed, caller:f.caller, at:S.t + f.delay, msg: good ? f.good : f.bad }); S.pending.sort((a,b)=>a.at-b.at); }
+  S.fb = {o, got, pen, delay, best, e}; S.active = null;
   renderAll();
 }
-function insertPending(ev){ S.pending.push(ev); S.pending.sort((a,b)=>a.at-b.at); }
-function applyState(bed, st){
-  if(!st) return; const b = S.beds[bed];
-  if(st.vent) b.vent = {...(b.vent||{}), ...st.vent};
-  if(st.hfnc) b.hfnc = {...(b.hfnc||{}), ...st.hfnc};
-  if(st.vitals) b.vitals = {...b.vitals, ...st.vitals};
-  b.alarm = st.alarm || null; b.wave = st.wave || null; b.abg = st.abg || null; b.extra = st.extra || null; b.finding = null;
-}
 function applyEffect(bed, ef){
-  const b = S.beds[bed]; b.alarm = null;
+  const b = S.beds[bed]; b.alarm = null; b.wave = null;
   if(!ef) return;
   if(ef.device){ b.device = ef.device; if(ef.device==='MV') delete b.hfnc; }
   if(ef.airway) b.airway = ef.airway;
   if(ef.vent) b.vent = {...(b.vent||{}), ...ef.vent};
   if(ef.vitals) b.vitals = {...b.vitals, ...ef.vitals};
-  if(ef.vent || ef.vitals) b.wave = null;
 }
-function addLog(s){ S.log.unshift(s); }
-
+function ackInfo(e){ S.ringing = S.ringing.filter(x=>x!==e); addLog(clockStr(S.t)+' '+e.bed+' '+e.msg); renderAll(); }
+function addLog(s){ S.log.unshift(s); renderLog(); }
 function endShift(reason){
-  S.over = true; S.running = false; S.resting = false;
-  S.endReason = reason; S.view = 'end';
+  S.over = true; S.running = false; S.busy = null; S.endReason = reason;
   S.missed = [...S.ringing.filter(e=>e.kind==='q'), ...(S.active?[S.active]:[]), ...S.pending.filter(e=>e.kind==='q')];
-  renderAll();
+  openOverlay('end');
 }
 
-// ---------- 聲音（使用者按下開始後才會響） ----------
+// ---------- 聲音 ----------
 let actx = null;
-function beep(){
-  try{
-    if(!actx) return;
-    [0,0.25].forEach(d=>{ const o = actx.createOscillator(), g = actx.createGain();
-      o.frequency.value = 880; g.gain.value = 0.06; o.connect(g); g.connect(actx.destination);
-      o.start(actx.currentTime+d); o.stop(actx.currentTime+d+0.15); });
+function beep(n){
+  try{ if(!actx) return;
+    for(let i=0;i<n;i++){ const o = actx.createOscillator(), g = actx.createGain();
+      o.frequency.value = n>=5?988:880; g.gain.value = 0.05; o.connect(g); g.connect(actx.destination);
+      o.start(actx.currentTime+i*0.22); o.stop(actx.currentTime+i*0.22+0.13); }
   }catch(_){}
 }
 
-// ---------- 畫面 ----------
-function renderAll(){ renderBar(); renderCall(); renderBeds(); renderView(); }
+// ---------- 繪圖 ----------
+const C = { floor:'#d9e2df', floor2:'#d2dcd8', grid:'#c8d3cf', wall:'#4e5d63', wallTop:'#65777e', curtain:'#8fbccb',
+  room:'#cfc9bd', room2:'#c7c1b4', sheet:'#f5f7f6', blanket:'#7fa6c9', pillow:'#ffffff', vent:'#47545c', ventScr:'#14202b',
+  desk:'#b48a5a', deskTop:'#c99d6a', text:'#24312f', textDim:'#5f6e6a', alarm:'#e5483b', ok:'#41b26b',
+  rt:'#1f8a8f', nurse:'#e58aa6', skin:'#f1c9a5', hair:'#2e2620', shadow:'rgba(0,0,0,.18)', night:'rgba(10,20,40,' };
+function draw(ts){
+  const W = MW*TS, H = MH*TS;
+  ctx.clearRect(0,0,W,H);
+  for(let y=0;y<MH;y++) for(let x=0;x<MW;x++){
+    const ch = MAP[y][x], px=x*TS, py=y*TS;
+    const inRoom = y>=12 && (x<=6 || x>=19);
+    if(ch==='#'||ch==='w'){ ctx.fillStyle = C.wall; ctx.fillRect(px,py,TS,TS); ctx.fillStyle=C.wallTop; ctx.fillRect(px,py,TS,6); continue; }
+    ctx.fillStyle = inRoom ? ((x+y)%2?C.room:C.room2) : ((x+y)%2?C.floor:C.floor2); ctx.fillRect(px,py,TS,TS);
+    if(ch==='|'){ ctx.fillStyle=C.curtain; ctx.fillRect(px+12,py,8,TS); ctx.fillStyle='rgba(255,255,255,.35)'; for(let k=0;k<4;k++) ctx.fillRect(px+13,py+k*8+2,2,4); }
+  }
+  // 床
+  BEDPOS.forEach((bp,i)=>{
+    const b = S.beds[bp.bed], x0 = (bp.tx)*TS, y0 = 1*TS;
+    const ring = S.ringing.find(e=>e.kind==='q'&&e.bed===bp.bed) || (S.active&&S.active.bed===bp.bed);
+    if(ring && Math.floor(ts*2)%2===0){ ctx.fillStyle='rgba(229,72,59,.18)'; ctx.fillRect(x0-TS,y0,TS*5,TS*2+2); }
+    ctx.fillStyle=C.shadow; ctx.fillRect(x0+4,y0+6,TS*2,TS*2-6);
+    ctx.fillStyle=C.sheet; ctx.fillRect(x0+2,y0+2,TS*2-4,TS*2-6);
+    ctx.fillStyle=C.pillow; ctx.fillRect(x0+12,y0+4,TS*2-24,10);
+    ctx.fillStyle=C.skin; ctx.beginPath(); ctx.arc(x0+TS,y0+16,7,0,7); ctx.fill();
+    ctx.fillStyle=C.blanket; ctx.fillRect(x0+4,y0+26,TS*2-8,TS*2-34);
+    if(b.device==='HFNC'){ ctx.strokeStyle='#9ad0e0'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x0+TS-6,y0+18); ctx.quadraticCurveTo(x0+TS*2+8,y0+20,x0+TS*3,y0+20); ctx.stroke(); }
+    else if(b.device!=='Trach collar'){ ctx.strokeStyle='#b7c6cf'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(x0+TS+4,y0+20); ctx.quadraticCurveTo(x0+TS*2+6,y0+34,x0+TS*3+4,y0+22); ctx.stroke(); }
+    // 呼吸器/監視器
+    const vx = (bp.tx+3)*TS+3, vy = y0+2;
+    ctx.fillStyle=C.vent; ctx.fillRect(vx,vy,TS-6,TS*2-6);
+    ctx.fillStyle=C.ventScr; ctx.fillRect(vx+3,vy+4,TS-12,24);
+    const sp = b.vitals.SpO2;
+    ctx.fillStyle = sp<90 ? C.alarm : C.ok; ctx.font='bold 12px '+getComputedStyle(document.documentElement).getPropertyValue('--f-mono');
+    ctx.textAlign='center'; ctx.fillText(sp, vx+(TS-6)/2, vy+21);
+    if(b.alarm && Math.floor(ts*3)%2===0){ ctx.fillStyle=C.alarm; ctx.beginPath(); ctx.arc(vx+(TS-6)/2, vy+40, 5, 0, 7); ctx.fill(); }
+    // 床號
+    ctx.fillStyle=C.text; ctx.font='bold 13px '+getComputedStyle(document.documentElement).getPropertyValue('--f-body');
+    ctx.textAlign='center'; ctx.fillText(bp.bed+' · '+b.device, x0+TS*1.5, 3*TS+20);
+  });
+  // 護理站
+  ctx.fillStyle=C.shadow; ctx.fillRect(10*TS+4,8*TS+6,8*TS,2*TS);
+  ctx.fillStyle=C.desk; ctx.fillRect(10*TS,8*TS,8*TS,2*TS); ctx.fillStyle=C.deskTop; ctx.fillRect(10*TS+4,8*TS+4,8*TS-8,2*TS-14);
+  ctx.fillStyle='#2b3740'; ctx.fillRect(11*TS,8*TS+10,26,18); ctx.fillRect(15*TS,8*TS+10,26,18);
+  ctx.fillStyle='#6fc3d6'; ctx.fillRect(11*TS+3,8*TS+13,20,12); ctx.fillRect(15*TS+3,8*TS+13,20,12);
+  ctx.fillStyle=C.text; ctx.font='bold 13px '+getComputedStyle(document.documentElement).getPropertyValue('--f-body'); ctx.textAlign='center';
+  ctx.fillText('護理站', 14*TS, 8*TS+40);
+  // 值班室 / 茶水間
+  ctx.fillStyle='#e9e4da'; ctx.fillRect(1*TS+2,12*TS+2,2*TS-4,2*TS-4); ctx.fillStyle='#8a9bb0'; ctx.fillRect(1*TS+2,12*TS+18,2*TS-4,2*TS-20); ctx.fillStyle='#fff'; ctx.fillRect(1*TS+8,12*TS+5,TS*2-16,10);
+  ctx.fillStyle=C.desk; ctx.fillRect(23*TS+2,12*TS+4,2*TS-4,2*TS-8); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(23*TS+20,12*TS+22,8,0,7); ctx.fill(); ctx.fillStyle='#d9a441'; ctx.beginPath(); ctx.arc(23*TS+20,12*TS+22,5,0,7); ctx.fill();
+  ctx.fillStyle=C.text; ctx.fillText('RT 值班室', 4.5*TS, 13*TS+24); ctx.fillText('茶水間', 21*TS, 13*TS+24);
+  // 人物
+  S.nurses.forEach(n=>drawPerson(n.x,n.y,C.nurse,n.moving,n.phase,1, n.call ? '!' : null, ts));
+  if(!S.busy) drawPerson(S.p.x,S.p.y,C.rt,S.p.moving,S.p.phase,S.p.dir, null, ts, true);
+  else { ctx.fillStyle=C.text; ctx.font='bold 14px sans-serif'; ctx.fillText(S.busy.kind==='rest'?'Zzz…':'吃飯中…', S.busy.kind==='rest'?2*TS:23.5*TS, 12*TS-4+Math.sin(ts*3)*3); }
+  // 夜間
+  const m = (START + S.t) % 1440, night = (m>=23*60||m<6*60) ? 0.22 : (m>=19*60||m<7*60) ? 0.1 : 0;
+  if(night){ ctx.fillStyle = C.night+night+')'; ctx.fillRect(0,0,W,H); }
+  // 提示
+  const z = !S.overlay && !S.busy && S.started ? nearZone() : null;
+  $('btnAct').hidden = !z; if(z) $('btnAct').textContent = 'E '+z.label;
+  if(z){ const tx = S.p.x*TS, ty = S.p.y*TS-38; const label='E  '+z.label; ctx.font='bold 13px sans-serif'; const w = ctx.measureText(label).width+16;
+    ctx.fillStyle='rgba(20,30,28,.85)'; ctx.fillRect(tx-w/2,ty-16,w,22); ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.fillText(label,tx,ty); }
+  if(S.p.path && S.p.path.length){ const g = S.p.path[S.p.path.length-1]; ctx.strokeStyle='rgba(31,138,143,.8)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(g.x*TS,g.y*TS,7+Math.sin(ts*6)*2,0,7); ctx.stroke(); }
+}
+function drawPerson(x,y,color,moving,phase,dir,bubble,ts,isPlayer){
+  const px = x*TS, py = y*TS, sw = moving ? Math.sin(phase)*3 : 0;
+  ctx.fillStyle=C.shadow; ctx.beginPath(); ctx.ellipse(px,py+10,9,4,0,0,7); ctx.fill();
+  ctx.fillStyle='#34424a'; ctx.fillRect(px-5,py+2+Math.max(0,sw)*0.6,4,9-Math.max(0,sw)); ctx.fillRect(px+1,py+2+Math.max(0,-sw)*0.6,4,9-Math.max(0,-sw));
+  ctx.fillStyle=color; ctx.fillRect(px-7,py-10,14,14);
+  ctx.fillRect(px-9,py-8+sw*0.5,3,9); ctx.fillRect(px+6,py-8-sw*0.5,3,9);
+  ctx.fillStyle=C.skin; ctx.beginPath(); ctx.arc(px,py-16,7,0,7); ctx.fill();
+  ctx.fillStyle=C.hair; ctx.beginPath(); ctx.arc(px,py-18,7,Math.PI,0); ctx.fill();
+  ctx.fillStyle='#222'; ctx.fillRect(px+dir*3-1,py-16,2,2);
+  if(isPlayer){ ctx.fillStyle='#fff'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.fillText('RT',px,py-1); }
+  if(bubble){ const by = py-34+Math.sin(ts*5)*2; ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(px,by,9,0,7); ctx.fill(); ctx.fillStyle=C.alarm; ctx.font='bold 14px sans-serif'; ctx.textAlign='center'; ctx.fillText(bubble,px,by+5); }
+}
+
+// ---------- HTML 面板 ----------
+function renderAll(){ renderBar(); renderCalls(); renderLog(); renderOverlay(); }
 function renderBar(){
   $('clock').textContent = clockStr(S.t);
   const left = Math.max(0, LEN - S.t);
-  $('toShift').textContent = S.resting ? '在值班室休息中…' : '距交班 '+Math.floor(left/60)+':'+String(Math.floor(left%60)).padStart(2,'0');
-  $('energyBar').style.width = S.energy.toFixed(0)+'%';
-  $('energyM').classList.toggle('low', S.energy < 25);
+  $('toShift').textContent = S.busy ? (S.busy.kind==='rest'?'休息中…':'吃飯中…') : '距交班 '+Math.floor(left/60)+':'+String(Math.floor(left%60)).padStart(2,'0');
+  $('energyBar').style.width = S.energy.toFixed(0)+'%'; $('energyM').classList.toggle('low', S.energy < 25);
+  $('hungerBar').style.width = S.hunger.toFixed(0)+'%';
   $('score').textContent = S.score + ' / ' + MAX;
   const live = S.started && !S.over;
   $('btnPause').disabled = !live; $('btnPause').textContent = S.running ? '暫停' : '繼續';
   $('btnSpeed').disabled = !live; $('btnSpeed').textContent = '速度 '+S.speed+'×';
-  $('btnSkip').disabled = !live || !S.running || S.ringing.length>0 || !!S.active || !S.pending.length;
-  $('btnRest').disabled = !live || !S.running || S.ringing.length>0 || !!S.active || S.resting;
+  $('btnSkip').disabled = !live || !S.running || S.ringing.length>0 || !!S.active || !!S.overlay || !S.pending.length;
 }
-function renderCall(){
-  const box = $('callBox');
-  if(!S.ringing.length){ box.innerHTML = ''; return; }
-  const e = S.ringing[0];
-  box.innerHTML = `<div class="call" role="alert">
-    <span class="ring">☎ 來電</span>
-    <p><b>${esc(e.bed)} ${esc(e.caller)}${e.recall?'（第二次來電）':''}</b>：「${esc(e.msg)}」
-    ${S.ringing.length>1?`<br><span class="hint">還有 ${S.ringing.length-1} 通未接</span>`:''}</p>
-    <button class="primary" id="btnAns" ${S.active?'disabled':''}>${e.kind==='info'?'知道了':'接聽，去床邊'}</button></div>`;
-  $('btnAns').onclick = ()=>answer(e);
+let callSig = '';
+function renderCalls(){
+  const box = $('calls');
+  const sig = S.ringing.map(e=>e.bed+e.at+(e.recall?1:0)+(e.crash?Math.floor((e.crash-(S.t-e.ringAt))):'' )).join('|');
+  if(sig===callSig) return; callSig = sig;
+  box.innerHTML = S.ringing.map((e,i)=>{
+    if(e.kind==='info') return `<div class="call info"><span class="ring">☎ ${esc(e.bed)}</span><p>${esc(e.caller)}：「${esc(e.msg)}」</p><button data-ack="${i}">知道了</button></div>`;
+    const left = e.crash ? Math.max(0, Math.ceil(e.crash - (S.t-e.ringAt))) : null;
+    return `<div class="call ${e.crash?'':'calm'}" role="alert"><span class="ring">☎ ${esc(e.bed)}</span>
+      <p><b>${esc(e.caller)}${e.recall?'（又打來了）':''}</b>：「${esc(e.msg)}」<br><span class="hint">走到 ${esc(e.bed)} 床邊按 E，或點地圖上的床</span></p>
+      ${left!==null?`<span class="left">撐不過 ${left} 分鐘</span>`:''}</div>`;
+  }).join('');
+  box.querySelectorAll('[data-ack]').forEach(el=>el.onclick=()=>ackInfo(S.ringing[+el.dataset.ack]));
 }
+function renderLog(){ $('log').innerHTML = S.log.slice(0,30).map(l=>`<div>${esc(l)}</div>`).join(''); }
+function openOverlay(kind){ S.overlay = kind; renderAll(); }
+function closeOverlay(){ if(S.active) return; S.overlay = null; S.fb = null; renderAll(); cv.focus(); }
+
 function bedSummary(b){
   if(b.device==='HFNC' && b.hfnc) return `HFNC ${b.hfnc.Flow} L/min · FiO2 ${b.hfnc.FiO2}%`;
   const v = b.vent||{};
@@ -410,40 +1043,27 @@ function bedSummary(b){
   if(v.mode==='Trach collar') return `Trach collar · FiO2 ${v.FiO2}%`;
   return `${v.mode||''} VT ${v.VT} · RR ${v.RR} · FiO2 ${v.FiO2}% · PEEP ${v.PEEP}`;
 }
-function renderBeds(){
-  $('beds').innerHTML = CASE.beds.map(c=>{
-    const b = S.beds[c.bed], ring = S.ringing.some(e=>e.bed===c.bed && e.kind==='q') || (S.active&&S.active.bed===c.bed);
-    return `<button class="bed ${S.selBed===c.bed&&S.view==='bed'?'sel':''}" data-bed="${c.bed}">
-      <span class="top"><b>${esc(c.bed)}</b><span class="chip ${ring?'alarm':''}">${ring?'需處理':esc(b.device)}</span></span>
-      <span class="dx">${esc(b.dx)}</span><span class="hint mono">${esc(bedSummary(b))}</span></button>`;
-  }).join('');
-  document.querySelectorAll('.bed').forEach(el=>el.onclick=()=>{
-    if(!S.started) return;
-    S.selBed = el.dataset.bed; S.view = 'bed'; renderAll();
-  });
-}
-
 function handoverHTML(){
   return `<div style="display:grid;gap:6px"><h2>交班單 · ${esc(CASE.unit)}</h2>
-    <p class="muted" style="margin:0">${esc(CASE.start)} 接班，${esc(CASE.end)} 交班。案例全部是虛構的。電話響了要接，拖太久會扣分；精力歸零就會累倒。</p></div>
+    <p class="muted" style="margin:0">${esc(CASE.start)} 接班，${esc(CASE.end)} 交班。公務機響了就走去床邊處理，越急的病人越撐不久，拖太久會 Code Blue。累了去值班室躺，餓了去茶水間吃飯。案例全部虛構。</p></div>
     <div class="tbl-wrap"><table><thead><tr><th>床號</th><th>年齡／性別</th><th>診斷</th><th>住院</th><th>人工氣道</th><th>設定</th><th>備註</th></tr></thead><tbody>
     ${CASE.beds.map(b=>`<tr><td><b>${esc(b.bed)}</b></td><td>${esc(b.age)} ${esc(b.sex)}</td><td>${esc(b.dx)}</td><td class="num">D${b.admitDay}</td>
       <td class="num">${esc(b.airway)}</td><td class="num">${esc(bedSummary(b))}</td><td>${esc(b.note)}</td></tr>`).join('')}
     </tbody></table></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="primary" id="btnStart">開始值班</button>
-    <span class="hint">1× 速度下，現實 1 秒 = 值班 1 分鐘。沒事的時候可以快轉或去休息。</span></div>`;
+    <span class="hint">1× 速度下，現實 1 秒 = 值班 1 分鐘。走路也要花時間。</span></div>`;
 }
 function ventHTML(b){
   const v = b.vent||{}, cells = [];
   if(b.device==='HFNC' && b.hfnc){
-    cells.push(['Flow',b.hfnc.Flow,'L/min'],['FiO2',b.hfnc.FiO2,'%']);
-    return `<div class="vent"><div class="hd"><span>HFNC</span></div><div class="vgrid">${cells.map(c=>`<div class="vcell"><span>${c[0]} ${c[2]}</span><b>${c[1]}</b></div>`).join('')}</div></div>`;
+    return `<div class="vent"><div class="hd"><span>HFNC</span>${b.alarm?`<span class="alarm">⚠ ${esc(b.alarm)}</span>`:''}</div><div class="vgrid">
+      <div class="vcell"><span>Flow L/min</span><b>${b.hfnc.Flow}</b></div><div class="vcell"><span>FiO2 %</span><b>${b.hfnc.FiO2}</b></div></div></div>`;
   }
-  const order = [['mode','Mode',''],['VT','VT','mL'],['RR','RR','/min'],['FiO2','FiO2','%'],['PEEP','PEEP','cmH2O'],['PS','PS','cmH2O'],['Ti','Ti','s'],['PIP','Ppeak','cmH2O'],['Pplat','Pplat','cmH2O']];
-  order.forEach(([k,l,u])=>{ if(v[k]!==undefined) cells.push([l,v[k],u,(k==='PIP'&&v[k]>=35)||(k==='Pplat'&&v[k]>30)]); });
+  [['mode','Mode',''],['VT','VT','mL'],['RR','RR','/min'],['FiO2','FiO2','%'],['PEEP','PEEP','cmH2O'],['PS','PS','cmH2O'],['Ti','Ti','s'],['PIP','Ppeak','cmH2O'],['Pplat','Pplat','cmH2O']]
+    .forEach(([k,l,u])=>{ if(v[k]!==undefined) cells.push([l,v[k],u,(k==='PIP'&&v[k]>=35)||(k==='Pplat'&&v[k]>30)]); });
   if(b.extra) Object.entries(b.extra).forEach(([k,val])=>cells.push([k,val,'',/Auto|VTe/.test(k)]));
   return `<div class="vent"><div class="hd"><span>${esc(v.mode==='Trach collar'?'Trach collar':'呼吸器')} · ${esc(b.airway)}</span>${b.alarm?`<span class="alarm">⚠ ${esc(b.alarm)}</span>`:''}</div>
-    ${v.mode==='Trach collar'?'':'<canvas id="wave" width="900" height="150" aria-label="壓力與流量波形"></canvas>'}
+    ${v.mode==='Trach collar'?'':'<canvas id="wave" width="900" height="140" aria-label="壓力與流量波形"></canvas>'}
     <div class="vgrid">${cells.map(c=>`<div class="vcell ${c[3]?'hi':''}"><span>${c[0]} ${c[2]}</span><b>${esc(c[1])}</b></div>`).join('')}</div></div>`;
 }
 function abgHTML(a){
@@ -455,97 +1075,105 @@ function abgHTML(a){
     </tbody></table></div>`;
 }
 function bedHTML(){
-  const b = S.beds[S.selBed], e = S.active && S.active.bed===S.selBed ? S.active : null;
-  const vt = b.vitals;
+  const b = S.beds[S.viewBed], e = S.active && S.active.bed===S.viewBed ? S.active : null, vt = b.vitals;
   let h = `<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">
       <h2>${esc(b.bed)} · ${esc(b.dx)}</h2><span class="muted">${esc(b.age)} ${esc(b.sex)} · 住院第 ${b.admitDay} 天</span></div>
     <div class="vitals"><span>HR <b>${vt.HR}</b></span><span>BP <b>${esc(vt.BP)}</b></span>
       <span>SpO2 <b class="${vt.SpO2<90?'H':''}">${vt.SpO2}%</b></span><span>RR <b>${vt.RRtotal}</b></span></div>
     ${ventHTML(b)}${abgHTML(b.abg)}`;
   if(e){
-    h += `<div class="find"><b>床邊評估：</b>${esc(e.finding)}</div>
-      <div class="q">${esc(e.question)}</div>
+    h += `<div class="find"><b>床邊評估：</b>${esc(e.finding)}</div><div class="q">${esc(e.question)}</div>
       <div class="opts">${e.options.map((o,i)=>`<button data-i="${i}">${String.fromCharCode(65+i)}. ${esc(o.text)}</button>`).join('')}</div>`;
-  } else if(S.fb && S.fb.e.bed===S.selBed){
+  } else if(S.fb && S.fb.e.bed===S.viewBed){
     const f = S.fb, cls = f.o.score>=8?'good':f.o.score>=4?'mid':'bad';
-    h += `<div class="fb ${cls}"><h3>${f.o.score>=8?'處置得當':f.o.score>=4?'方向對了一半':'這樣處理有風險'}（+${f.got}${f.pen?`，延遲 ${f.delay} 分鐘扣 ${f.pen}`:''}）</h3>
+    h += `<div class="fb ${cls}"><h3>${f.o.score>=8?'處置得當':f.o.score>=4?'方向對了一半':'這樣處理有風險'}（+${f.got}${f.pen?`，晚到 ${f.delay} 分鐘扣 ${f.pen}`:''}）</h3>
       <div>${esc(f.o.fb)}</div><div><b>重點：</b>${esc(f.e.teach)}</div><div class="real">${esc(f.e.real)}</div></div>
-      <div><button id="btnBack">回護理站</button></div>`;
+      <div><button class="primary" id="btnBack">離開床邊（Esc）</button></div>`;
   } else {
-    h += `<div class="find">${esc(b.note)}</div><div><button id="btnBack">回護理站</button></div>`;
+    h += `<div class="find">${esc(b.note)}</div><div><button id="btnBack">離開床邊（Esc）</button></div>`;
   }
   return h;
-}
-function stationHTML(){
-  return `<h2>護理站</h2><p class="muted" style="margin:0">目前沒有電話。可以點左邊床位巡房，也可以快轉或去值班室休息。</p>
-    <div class="log">${S.log.map(l=>`<div>${esc(l)}</div>`).join('') || '<div>還沒有事件。</div>'}</div>`;
 }
 function endHTML(){
   const pct = Math.round(S.score/MAX*100);
   return `<h2>${esc(S.endReason)}</h2>
     <div style="display:flex;gap:18px;align-items:baseline;flex-wrap:wrap"><span class="end-score">${S.score} / ${MAX}</span>
-    <span class="muted">${pct>=85?'學長姐說：今晚很穩，可以放心交給你。':pct>=60?'學長姐說：大方向沒錯，幾個細節回去再複習。':'學長姐說：明天找時間一起看一下這幾床。'}</span></div>
+    <span class="muted">${S.codes?`今晚 Code Blue ${S.codes} 次。`:'今晚零 Code Blue。'} ${pct>=85?'學長姐說：很穩，可以放心交給你。':pct>=60?'學長姐說：大方向沒錯，幾個細節回去再複習。':'學長姐說：明天找時間一起看一下這幾床。'}</span></div>
     <div class="tbl-wrap"><table><thead><tr><th>時間</th><th>床</th><th>你的處置</th><th>得分</th><th>重點</th></tr></thead><tbody>
-    ${S.done.map(d=>`<tr><td class="num">${esc(d.e.t)}</td><td>${esc(d.e.bed)}</td><td>${esc(d.o.text)}${d.pen?`<br><span class="hint">延遲 ${d.delay} 分鐘</span>`:''}</td>
+    ${S.done.map(d=>`<tr><td class="num">${esc(d.e.t)}</td><td>${esc(d.e.bed)}</td><td>${d.code?'<span class="H">來不及，Code Blue</span>':esc(d.o.text)}${d.pen&&!d.code?`<br><span class="hint">晚到 ${d.delay} 分鐘</span>`:''}</td>
       <td class="num">${d.got} / ${d.best}</td><td>${esc(d.e.teach)}</td></tr>`).join('')}
     ${S.missed.map(e=>`<tr><td class="num">${esc(e.t)}</td><td>${esc(e.bed)}</td><td class="H">沒有處理</td><td class="num">0</td><td>${esc(e.teach)}</td></tr>`).join('')}
     </tbody></table></div>
     <div><button class="primary" id="btnAgain">重新開始一晚</button></div>`;
 }
-function renderView(){
-  const v = $('view');
-  v.innerHTML = S.view==='handover' ? handoverHTML() : S.view==='end' ? endHTML() : S.view==='bed' ? bedHTML() : stationHTML();
+function renderOverlay(){
+  const ov = $('ov'), pn = $('panel');
+  ov.hidden = !S.overlay;
+  if(!S.overlay) return;
+  pn.innerHTML = S.overlay==='handover' ? handoverHTML() : S.overlay==='end' ? endHTML() : bedHTML();
   if($('btnStart')) $('btnStart').onclick = ()=>{
     try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(_){}
-    S.started = true; S.running = true; S.view = 'station'; last = performance.now(); addLog(CASE.start+' 接班。'); renderAll();
+    S.started = true; S.running = true; S.overlay = null; last = performance.now(); addLog(CASE.start+' 接班。'); renderAll(); cv.focus();
   };
-  if($('btnBack')) $('btnBack').onclick = ()=>{ S.view='station'; S.fb=null; renderAll(); };
-  if($('btnAgain')) $('btnAgain').onclick = ()=>{ reset(); renderAll(); };
-  v.querySelectorAll('.opts button').forEach(el=>el.onclick=()=>choose(+el.dataset.i));
+  if($('btnBack')) $('btnBack').onclick = closeOverlay;
+  if($('btnAgain')) $('btnAgain').onclick = ()=>{ reset(); callSig=''; renderAll(); };
+  pn.querySelectorAll('.opts button').forEach(el=>el.onclick=()=>choose(+el.dataset.i));
   drawWave();
 }
-
-// ---------- 波形 ----------
 function drawWave(){
-  const cv = $('wave'); if(!cv) return;
-  const b = S.beds[S.selBed], v = b.vent||{}, ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  const wc = $('wave'); if(!wc) return;
+  const b = S.beds[S.viewBed], v = b.vent||{}, g = wc.getContext('2d'), W = wc.width, H = wc.height;
   const cs = getComputedStyle(document.documentElement);
-  ctx.fillStyle = cs.getPropertyValue('--vs-panel'); ctx.fillRect(0,0,W,H);
+  g.fillStyle = cs.getPropertyValue('--vs-panel'); g.fillRect(0,0,W,H);
   const mid = H*0.5, kind = b.wave, spont = v.mode==='PSV'||v.mode==='CPAP';
   const peep = v.PEEP||5, pip = v.PIP || (peep+(v.PS||10)+3), plat = v.Pplat||pip;
   const period = 260, ti = kind==='autopeep'?100:(spont?80:90);
-  // 壓力（上半）
-  ctx.strokeStyle = cs.getPropertyValue('--vs-p'); ctx.lineWidth = 2; ctx.beginPath();
+  g.strokeStyle = cs.getPropertyValue('--vs-p'); g.lineWidth = 2; g.beginPath();
   const py = p => mid - 8 - (p/50)*(mid-16);
-  for(let x=0;x<W;x++){
-    const ph = x % period; let p;
+  for(let x=0;x<W;x++){ const ph = x % period; let p;
     if(ph<ti){ const r = ph/ti; p = spont ? peep + (pip-peep)*Math.min(1,r*4) : (kind==='stiff' ? peep+(pip-peep)*r : peep + (plat-peep)*r + (pip-plat)*(r>0.85?1:r*0.5)); }
     else p = peep + (pip-peep)*Math.exp(-(ph-ti)/12);
-    x? ctx.lineTo(x,py(p)) : ctx.moveTo(x,py(p));
-  }
-  ctx.stroke();
-  // 流量（下半）
-  ctx.strokeStyle = cs.getPropertyValue('--vs-f'); ctx.beginPath();
+    x? g.lineTo(x,py(p)) : g.moveTo(x,py(p)); }
+  g.stroke();
+  g.strokeStyle = cs.getPropertyValue('--vs-f'); g.beginPath();
   const base = H*0.78, amp = H*0.17;
-  for(let x=0;x<W;x++){
-    const ph = x % period; let f;
+  for(let x=0;x<W;x++){ const ph = x % period; let f;
     if(ph<ti) f = spont ? Math.exp(-ph/35) : 0.8;
     else { const k = kind==='autopeep'?75:28; f = -Math.exp(-(ph-ti)/k) * (kind==='leak'?0.35:1); }
-    const y = base - f*amp;
-    x? ctx.lineTo(x,y) : ctx.moveTo(x,y);
-  }
-  ctx.stroke();
-  ctx.fillStyle = cs.getPropertyValue('--vs-dim'); ctx.font = '12px '+cs.getPropertyValue('--f-mono');
-  ctx.fillText('Paw', 6, 14); ctx.fillText('Flow', 6, H*0.62);
-  ctx.strokeStyle = cs.getPropertyValue('--vs-dim'); ctx.globalAlpha = .35; ctx.beginPath(); ctx.moveTo(0,base); ctx.lineTo(W,base); ctx.stroke(); ctx.globalAlpha = 1;
+    x? g.lineTo(x,base - f*amp) : g.moveTo(x,base - f*amp); }
+  g.stroke();
+  g.fillStyle = cs.getPropertyValue('--vs-dim'); g.font = '12px monospace'; g.fillText('Paw', 6, 14); g.fillText('Flow', 6, H*0.62);
 }
 
-// ---------- 控制 ----------
+// ---------- 輸入 ----------
+const KEYMAP = {ArrowUp:1,ArrowDown:1,ArrowLeft:1,ArrowRight:1,w:1,a:1,s:1,d:1,W:1,A:1,S:1,D:1};
+window.addEventListener('keydown', ev=>{
+  if(ev.target.closest && ev.target.closest('input,textarea')) return;
+  if(KEYMAP[ev.key]){ if(S.started && !S.overlay) ev.preventDefault(); keys[ev.key.length===1?ev.key.toLowerCase():ev.key] = true; }
+  if(ev.key==='Shift') keys.Shift = true;
+  if((ev.key==='e'||ev.key==='E') && !S.overlay){ interact(nearZone()); }
+  if(ev.key==='Escape' && S.overlay==='bed') closeOverlay();
+  if((ev.key==='p'||ev.key==='P') && !$('btnPause').disabled) $('btnPause').click();
+});
+window.addEventListener('keyup', ev=>{ if(KEYMAP[ev.key]) keys[ev.key.length===1?ev.key.toLowerCase():ev.key] = false; if(ev.key==='Shift') keys.Shift = false; });
+window.addEventListener('blur', ()=>{ for(const k in keys) keys[k]=false; });
+cv.tabIndex = 0;
+cv.addEventListener('pointerdown', ev=>{
+  if(!S.started || S.overlay || S.busy || !S.running) return;
+  const r = cv.getBoundingClientRect(), mx = (ev.clientX-r.left)/r.width*MW, my = (ev.clientY-r.top)/r.height*MH;
+  // 點到床、值班室、茶水間 → 走過去並自動互動
+  let z = ZONES.find(z=>Math.abs(mx-(z.kind==='bed'?z.x:z.x))<2 && my < (z.kind==='bed'?4:15) && my > (z.kind==='bed'?0.5:11.5) && (z.kind!=='bed' || Math.abs(mx-z.x)<2.5));
+  let tx, ty;
+  if(z){ tx = z.tx+1; ty = z.kind==='bed'?3:12; if(solid(tx,ty)) { tx=z.tx; } }
+  else { tx = Math.floor(mx); ty = Math.floor(my); if(solid(tx,ty)) return; }
+  const path = bfs(S.p.x,S.p.y,tx,ty); if(!path) return;
+  S.p.path = path; S.p.auto = z||null;
+});
+$('btnAct').onclick = ()=>interact(nearZone());
 $('btnPause').onclick = ()=>{ S.running = !S.running; last = performance.now(); renderBar(); };
-$('btnSpeed').onclick = ()=>{ S.speed = S.speed===1?4:S.speed===4?10:1; renderBar(); };
-$('btnSkip').onclick = ()=>{ const n = S.pending[0]; if(!n) return; const jump = n.at - S.t; S.energy = Math.max(1, S.energy - jump*0.055); S.t = n.at; checkEvents(); renderAll(); };
-$('btnRest').onclick = ()=>{ S.resting = true; S.view = 'station'; addLog(clockStr(S.t)+' 去值班室休息。'); renderAll(); };
-document.addEventListener('keydown', ev=>{ if(ev.key==='p'||ev.key==='P'){ if(!$('btnPause').disabled) $('btnPause').click(); } });
+$('btnSpeed').onclick = ()=>{ S.speed = S.speed===1?2:S.speed===2?4:1; renderBar(); };
+$('btnSkip').onclick = ()=>{ const n = S.pending[0]; if(!n) return; const jump = n.at - S.t;
+  S.energy = Math.max(1, S.energy - jump*0.05); S.hunger = Math.min(100, S.hunger + jump*0.07); S.t = n.at; checkEvents(); renderAll(); };
 
 renderAll();
 })();
