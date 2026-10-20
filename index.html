@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#05080d">
-  <title>我熱愛值班 · 一般民眾體驗版</title>
-  <meta name="description" content="走進病房值一整晚：電話會響、病人會變差、便當放到涼掉都還沒吃。用選的決定怎麼做，順便學會看懂急救。">
+  <title>RT 夜班 · 呼吸治療師版</title>
+  <meta name="description" content="呼吸治療師的一整晚：呼吸器在叫、電話在響、便當放到涼掉都還沒吃。用選的決定怎麼處理。">
   <!-- link previews (LINE, Facebook, IG): put your own address and picture here once the game is online
   <meta property="og:url" content="https://example.com/">
   <meta property="og:image" content="https://example.com/og.jpg"> -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="我熱愛值班 · 一般民眾體驗版">
-  <meta property="og:description" content="走進病房值一整晚：電話會響、病人會變差、便當放到涼掉都還沒吃。">
+  <meta property="og:title" content="RT 夜班 · 呼吸治療師版">
+  <meta property="og:description" content="呼吸治療師的一整晚：呼吸器在叫、電話在響、便當放到涼掉都還沒吃。">
   <!-- no tab icon of its own: put yours here (an empty one keeps the browser from asking for /favicon.ico) -->
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="game/game.css">
@@ -60,7 +60,7 @@
         <section class="bs-panel" aria-label="床邊">
           <header class="bs-head">
             <div><span class="bs-bed red" id="pcBed"></span><b id="pcWho"></b><small id="pcSub"></small></div>
-            <div class="bs-actions"><button class="btn go" id="pcLab" type="button">抽血檢查</button><button class="btn" id="pcPause" type="button">暫停</button></div>
+            <div class="bs-actions"><button class="btn go" id="pcLab" type="button">抽 ABG</button><button class="btn" id="pcPause" type="button">暫停</button></div>
           </header>
           <div class="pc-monitor" id="pcMonitor" aria-label="床邊監視器"></div>
           <div class="pc-log" id="pcLog" aria-live="polite"></div>
@@ -170,7 +170,7 @@
           <div class="side">
             <div class="score"><b id="hScore">0</b><span>今晚被電話吵醒（次）</span></div>
             <span class="badge" id="hBadge"></span>
-            <div class="chiefrow"><span class="avatar" id="hChiefAvatar"></span><p class="chief"><small>值班醫師的心聲</small><span id="hChief"></span></p></div>
+            <div class="chiefrow"><span class="avatar" id="hChiefAvatar"></span><p class="chief"><small>值班 RT 的心聲</small><span id="hChief"></span></p></div>
             <div class="actions"><button class="btn go" id="hAgain" type="button">再值一晚</button><button class="btn go" id="hShare" type="button">分享圖卡</button><button class="btn" id="hCopy" type="button">複製文字</button></div>
           </div>
         </div>
@@ -189,9 +189,9 @@
       <div class="start" id="start" hidden>
         <div class="card">
           <div class="lhs">
-            <p class="eyebrow" id="gEyebrow">我熱愛值班 · 一般民眾體驗版</p>
+            <p class="eyebrow" id="gEyebrow">RT 夜班 · 呼吸治療師版</p>
             <h1 id="gTitle">夜班，17:00 接班</h1>
-            <p id="gIntro">你是今晚的值班醫師，一個人顧整層病房，從下午五點值到隔天早上八點。電話會響：有的只是小事，有的是真的危險。吃飯、睡覺、上廁所，都得自己找空檔。</p>
+            <p id="gIntro">你是今晚的值班呼吸治療師（RT），一個人顧整層呼吸照護病房的呼吸器，從下午五點值到隔天早上八點。電話會響：有的只是小事，有的是真的危險。吃飯、睡覺、上廁所，都得自己找空檔。</p>
             <dl id="gKeys">
               <dt><span class="key">↑</span><span class="key">↓</span><span class="key">←</span><span class="key">→</span></dt><dd>走路（按住 Shift 用跑的）</dd>
               <dt><span class="key">E</span></dt><dd>看病人、吃便當、上床睡覺、上廁所</dd>
@@ -211,10 +211,10 @@
             </fieldset>
             <p>選你今晚的樣子：</p>
             <div class="pick">
-              <button type="button" data-pgy="m"><img src="assets/game/char/pgy_m_neutral.svg" alt=""><span>男醫師</span></button>
-              <button type="button" data-pgy="f"><img src="assets/game/char/pgy_f_neutral.svg" alt=""><span>女醫師</span></button>
+              <button type="button" data-pgy="m"><img src="assets/game/char/pgy_m_neutral.svg" alt=""><span>男 RT</span></button>
+              <button type="button" data-pgy="f"><img src="assets/game/char/pgy_f_neutral.svg" alt=""><span>女 RT</span></button>
             </div>
-            <p id="gDisclaimer" class="warn-note">內容包含病人病危和死亡的情節。遊戲僅供衛教，不能取代就醫；遇到緊急狀況請打 119。</p>
+            <p id="gDisclaimer" class="warn-note">內容包含病人病危和死亡的情節。遊戲僅供教學練習，內容不是臨床指引；實際處置請依醫囑與單位規範。</p>
             <p class="credit"></p>
           </div>
         </div>
@@ -241,9 +241,9 @@
           </section>
           <section class="sheet">
             <h2>白班交班單</h2>
-            <div class="from"><span id="briefFrom">白班 R1 → 你</span><span>17:00 · 今晚要注意的：</span></div>
+            <div class="from"><span id="briefFrom">白班 RT → 你</span><span>17:00 · 今晚要注意的：</span></div>
             <div class="pts" id="briefList"></div>
-            <footer>今晚整層樓只有你一個醫師。上面這幾床白天都很穩，真正的狀況，會從電話裡來。</footer>
+            <footer>今晚整層樓只有你一個 RT。上面這幾床白天都很穩，真正的狀況，會從電話裡來。</footer>
           </section>
           <section class="brief-side">
             <div class="bcard">

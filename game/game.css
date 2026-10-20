@@ -522,3 +522,10 @@ body.at-bedside .hud-right, body.at-bedside .hud-calls, body.at-bedside .goal { 
 .credit a:hover { border-bottom-color: var(--g-teal); }
 .handover .credit { font-size: .66em; color: #a19a90; }
 .handover .credit a { color: #7a6f60; border-bottom-color: rgba(122, 111, 96, .4); }
+
+/* the ventilator row under the bedside monitor: settings and pressures, red when out of range */
+.pc-vent { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .25em 1em; padding-top: .35em; border-top: 1px solid #1d2b37; }
+.pc-vent span { display: grid; min-width: 3.6em; }
+.pc-vent small { font-size: .68em; color: var(--g-dim); }
+.pc-vent b { font: 700 1.05em var(--font-num); color: #ffd25a; }
+.pc-vent .bad b { color: #ff6b5e; }

@@ -30,7 +30,7 @@ const YAW = THREE.MathUtils.degToRad(35), PITCH = THREE.MathUtils.degToRad(40);
 
 // What the game is called, and the line that says what it was made from. A game made from this
 // template keeps CREDIT on its start card and its summary (see README.md, 授權).
-const GAME = { title: '我熱愛值班', edition: '一般民眾體驗版', site: location.host };
+const GAME = { title: 'RT 夜班', edition: '呼吸治療師版', site: location.host };
 const CREDIT = { text: '以《我熱愛值班》範本製作', url: 'https://drcharming.net/' };
 
 try {
@@ -867,20 +867,20 @@ async function boot() {
   const CASES = {
     // the patient was fine all along: walking over only costs sleep. The nurse is kind about it
     // (players read a smirk or a blank stare as the nurse mocking them)
-    'v-new': { bed: wb('03B'), kind: 'false', level: 'amber', nurse: '怡君', short: '新病人報到', face: 'thankful',
-      line: '醫師你怎麼跑來了？我電話裡說他很穩啊……他現在睡得比你還好。' },
-    'v-ins': { bed: wb('08A'), kind: 'false', level: 'amber', nurse: '小雯', short: '睡不著想要安眠藥', face: 'thankful',
-      line: '……醫師，他只是睡不著，你一來他更清醒了。電話講一聲就好啦。' },
-    'v-iv': { bed: wb('03A'), kind: 'false', level: 'amber', nurse: '怡君', short: '點滴跑完了', face: 'thankful',
-      line: '醫師，電話說「續原本的」就好了啦。不過既然你都來了，順便幫我看一下他的點滴部位好了。' },
-    'v-stool': { bed: wb('08A'), kind: 'false', level: 'amber', nurse: '小雯', short: '三天沒大便', face: 'thankful',
-      line: '醫師……你五點跑來看大便？電話說「給一顆軟便藥」就好了啦。' },
-    'v-temp': { bed: wb('11A'), kind: 'false', level: 'amber', nurse: '佳穎', short: '體溫 37.8 度', face: 'thankful',
-      line: '醫師……37.8 而已，他睡得比你還熟。我只是照規定跟你報告，你快回去躺吧。' },
-    'v-bp': { bed: wb('03B'), kind: 'false', level: 'amber', nurse: '怡君', short: '早上血壓有點高', face: 'thankful',
-      line: '醫師，他血壓一點點高、人好好的，我只是照規定跟你報告……快交班了，你回去躺十分鐘吧。' },
-    'v-fam': { bed: wb('11A'), kind: 'false', level: 'amber', nurse: '佳穎', short: '家屬問出院時間', face: 'thankful',
-      line: '醫師你怎麼親自跑來了？家屬只是想問明天幾點出院，你講一聲我轉達就好啦。' },
+    'v-neb': { bed: wb('03A'), kind: 'false', level: 'amber', nurse: '怡君', short: '吸入藥可以晚點給嗎', face: 'thankful',
+      line: 'RT 你怎麼跑來了？我只是問可不可以晚半小時給……他還在洗澡啦。' },
+    'v-o2': { bed: wb('04A'), kind: 'false', level: 'amber', nurse: '怡君', short: '鼻導管血氧 99%', face: 'thankful',
+      line: 'RT，電話說「調到 2 L」就好了啦。不過既然你來了，順便看一下他鼻子有沒有破皮好了。' },
+    'v-cough': { bed: wb('07A'), kind: 'false', level: 'amber', nurse: '小雯', short: '咳嗽叫了一下警報', face: 'thankful',
+      line: 'RT 你怎麼來了？我電話裡說抽完痰就好了啊……他現在睡得比你還好。' },
+    'v-mask': { bed: wb('06B'), kind: 'false', level: 'amber', nurse: '小雯', short: 'BiPAP 面罩壓得痛', face: 'thankful',
+      line: '……RT，貼個人工皮、頭帶鬆一格，電話講一聲我就會了啦。' },
+    'v-water': { bed: wb('11A'), kind: 'false', level: 'amber', nurse: '佳穎', short: '管路好多積水', face: 'thankful',
+      line: 'RT……你半夜跑來倒積水？我自己倒就好了，你快回去躺吧。' },
+    'v-abg': { bed: wb('04B'), kind: 'false', level: 'amber', nurse: '怡君', short: '早上 ABG 正常', face: 'thankful',
+      line: 'RT，ABG 都正常，我只是照規定跟你報告……快交班了，你回去躺十分鐘吧。' },
+    'v-fam': { bed: wb('08A'), kind: 'false', level: 'amber', nurse: '小雯', short: '家屬問能不能拔管', face: 'thankful',
+      line: 'RT 你怎麼親自跑來了？家屬只是想問今天能不能拔管，你講一聲「等主治醫師查房」我轉達就好啦。' },
   };
   // the shift: handover at 17:00, the day team is back at 08:00 the next morning
   const START = 17 * 60, END = 32 * 60;
@@ -896,8 +896,8 @@ async function boot() {
   };
   // tonight's dinner patient, set when the night is drawn (startPublicNight)
   const night = { dinner: null };
-  // blood results come back this many game minutes after the draw
-  const LAB_WAIT = 30;
+  // an ABG comes back this many game minutes after the draw
+  const LAB_WAIT = 15;
   // everything about tonight: the clock, the doctor's needs, the calls, the counts for the summary
   const S = {
     started: false, mode: 'walk', map: false, t: START,
@@ -969,7 +969,7 @@ async function boot() {
       : '<p class="empty">目前沒有人找你。</p>')
       + (S.labs.some(l => !l.seen) ? `<header class="labhead">檢驗</header><ol class="labs">${S.labs.map((l, i) => (l.seen ? '' : l.ready
         ? `<li class="lab ready" data-lab="${i}"><b>${l.bed}</b><span>檢驗報告出來了</span><time>點一下查看</time></li>`
-        : `<li class="lab"><b>${l.bed}</b><span>抽血送檢中</span><time>約 ${Math.max(1, Math.ceil(l.readyAt - S.t))} 分鐘後出來</time></li>`)).join('')}</ol>` : '');
+        : `<li class="lab"><b>${l.bed}</b><span>ABG 送檢中</span><time>約 ${Math.max(1, Math.ceil(l.readyAt - S.t))} 分鐘後出來</time></li>`)).join('')}</ol>` : '');
     // rebuilt only when it changes, so a lab result is still there when the click lands
     if (callsHtml !== lastCallsHtml) { lastCallsHtml = callsHtml; $('calls').innerHTML = callsHtml; }
     $('goal').innerHTML = goalText();
@@ -1072,7 +1072,7 @@ async function boot() {
     $('recallPic').src = IMG(`nurse_${face}`);
     $('recallMe').src = ME('nervous');
     $('recallBed').textContent = `${c.bed} · 護理師${c.nurse}`;
-    $('recallText').textContent = `醫師！${c.bed} ${text}`;
+    $('recallText').textContent = `RT！${c.bed} ${text}`;
     $('recallNote').textContent = note;
     $('recall').hidden = false;
   }
@@ -1161,13 +1161,13 @@ async function boot() {
   function spawnDinnerCall(late) {
     const id = night.dinner;
     S.stats.callsIn++; spawnCase(id, late ? 6 : 0);
-    S.calls[id].said = publicText(id).replace(/^醫師[！，]\S+ (?:的)?/, ''); S.calls[id].saidAt = S.t;
+    S.calls[id].said = publicText(id).replace(/^(?:RT|醫師)[！，]\S+ (?:的)?/, ''); S.calls[id].saidAt = S.t;
     plog(`電話：${CASES[id].bed} ${CASES[id].short}（便當吃到一半）`, 'warn');
   }
   $('iGo').addEventListener('click', () => { $('interrupt').hidden = true; S.cold = true; stopEat(); spawnDinnerCall(false); toast(`${CASES[night.dinner].bed} ${CASES[night.dinner].short}，快去！`, 3); frame.focus(); });
   $('iBite').addEventListener('click', () => {
     $('interrupt').hidden = true; S.eaten = Math.min(100, S.eaten + 15); S.energy = Math.min(100, S.energy + 5); S.full = Math.max(S.full, 12 + S.eaten * 0.85); S.cold = true;
-    stopEat(); spawnDinnerCall(true); toast('護理師又打來了：「醫師你人呢？！」', 3.5); frame.focus();
+    stopEat(); spawnDinnerCall(true); toast('護理師又打來了：「RT 你人呢？！」', 3.5); frame.focus();
   });
 
   // ---------- lab results ----------
@@ -1186,7 +1186,7 @@ async function boot() {
     if (!lab || !lab.ready) return;
     lab.seen = true;
     $('glabTitle').textContent = `${lab.bed} 床`;
-    $('glabWhen').textContent = `${fmt(lab.at)} 抽血 · ${fmt(lab.readyAt)} 回報`;
+    $('glabWhen').textContent = `${fmt(lab.at)} 抽 ABG · ${fmt(lab.readyAt)} 回報`;
     const tbody = $('glabRows'); tbody.replaceChildren();
     let group = '';
     for (const r of lab.rows) {
@@ -1340,7 +1340,7 @@ async function boot() {
       if (call?.state !== 'active' || call.opened || S.late[c.id] || S.t - call.since < 30) continue;
       S.late[c.id] = true; S.stats.worsened++;
       plog(`${CASES[c.id].bed} 等太久沒人來，${c.name}變差了`, 'warn');
-      ring(CASES[c.id], 'panic', c.again.replace(/^醫師[！，]\{bed\} (?:的)?/, ''), '答應了要去，病人卻等太久，變差了。');
+      ring(CASES[c.id], 'panic', c.again.replace(/^(?:RT|醫師)[！，]\{bed\} (?:的)?/, ''), '答應了要去，病人卻等太久，變差了。');
       return;
     }
   }
@@ -1383,7 +1383,7 @@ async function boot() {
       plog('你：馬上過去', 'best');
       if (sc.asleep) stopSleep(); else S.mode = 'walk';
       if (!S.calls[c.id]) spawnCase(c.id);
-      S.calls[c.id].said = sc.text.replace(/^醫師[！，]\{bed\} (?:的)?/, ''); S.calls[c.id].saidAt = S.t;
+      S.calls[c.id].said = sc.text.replace(/^(?:RT|醫師)[！，]\{bed\} (?:的)?/, ''); S.calls[c.id].saidAt = S.t;
       nextPublicCall();
       toast(`往 ${CASES[c.id].bed} 跑！`, 2.5);
       return;
@@ -1427,7 +1427,7 @@ async function boot() {
     const c = PCASE[id], late = !!S.late[id];
     // 「從這一床重來」 comes back to this moment
     if (PC.id !== id || !PC.snap) PC.snap = { t: S.t, energy: S.energy, plog: S.plog.length };
-    Object.assign(PC, { id, step: 'first', state: late ? c.late : 'start', extra: null, danger: late ? 2 : 0, off: new Set(), log: [], orderFor: null,
+    Object.assign(PC, { id, step: 'first', state: late ? c.late : 'start', extra: null, vent: null, danger: late ? 2 : 0, off: new Set(), log: [], orderFor: null,
       warned: late && c.late === c.warn.state, cpr: null, done: false, outcome: null });
     say(late ? 'alarm' : 'nurse', `${c.nurse}：「${late ? c.introLate : c.intro}」`);
     plog(`到 ${CASES[id].bed} ${c.name}床邊`);
@@ -1435,7 +1435,7 @@ async function boot() {
   }
   const EXTRA = { sugar: ['血糖', '還沒測'], ekg: ['心電圖', '還沒做'], breath: ['呼吸聲', '還沒聽'], urine: ['尿量', '還沒看'], skin: ['皮膚', '還沒看'],
     head: ['頭部', '還沒看'], fit: ['抽搐', '還沒計時'], temp: ['體溫', '還沒量'], rr: ['呼吸次數', '還沒數'], stool: ['大便', '還沒看'],
-    rhythm: ['心律', '還沒貼 AED'] };
+    rhythm: ['心律', '還沒貼 AED'], cuff: ['Cuff 壓力', '還沒量'], lung: ['兩側呼吸音', '還沒聽'], rox: ['ROX', '還沒算'] };
   function monitorHtml() {
     const c = C(), st = c.states[PC.state];
     if (st[c.extra] !== undefined) PC.extra = st[c.extra];
@@ -1450,7 +1450,12 @@ async function boot() {
     const ex = v == null ? cell(label, '?', none, 'na txt')
       : c.extra === 'sugar' ? cell(label, v, v < 70 ? '太低' : v > 180 ? '偏高' : '正常', v < 70 ? 'bad' : v > 180 ? 'warn' : '')
       : cell(label, esc(v), '', `txt ${c.extraOk?.includes(v) ? '' : c.extraWarn?.includes(v) ? 'warn' : 'bad'}`);
-    return hr + bp + sp + ex + cell('意識', esc(st.mind), '', st.calm || /^清醒(?!，但)/.test(st.mind) ? 'mind' : 'mind bad');
+    // A bed on a ventilator also shows its settings and pressures; `vent: undefined` keeps the last
+    // reading and `hi` names the numbers drawn in red.
+    if (st.vent !== undefined) PC.vent = st.vent;
+    const vent = !PC.vent ? '' : `<div class="pc-vent">${Object.entries(PC.vent).filter(([k]) => k !== 'hi')
+      .map(([k, val]) => `<span class="${PC.vent.hi?.includes(k) ? 'bad' : ''}"><small>${esc(k)}</small><b>${esc(val)}</b></span>`).join('')}</div>`;
+    return hr + bp + sp + ex + cell('意識', esc(st.mind), '', st.calm || /^清醒(?!，但)/.test(st.mind) ? 'mind' : 'mind bad') + vent;
   }
   function renderPublicCase() {
     const c = C();
@@ -1494,7 +1499,7 @@ async function boot() {
   // minutes later in the call list and behind this button
   function publicLabButton() {
     const lab = S.labs.find(l => l.id === PC.id), b = $('pcLab');
-    b.textContent = !lab ? '抽血檢查' : lab.ready ? (lab.seen ? '檢驗報告' : '檢驗報告（新）') : `報告約 ${Math.max(1, Math.ceil(lab.readyAt - S.t))} 分鐘後`;
+    b.textContent = !lab ? '抽 ABG' : lab.ready ? (lab.seen ? 'ABG 報告' : 'ABG 報告（新）') : `報告約 ${Math.max(1, Math.ceil(lab.readyAt - S.t))} 分鐘後`;
     b.classList.toggle('go', !lab || lab.ready);
   }
   $('pcLab').addEventListener('click', () => {
@@ -1502,7 +1507,7 @@ async function boot() {
     const k = S.labs.findIndex(l => l.id === PC.id), lab = S.labs[k], c = C();
     if (lab?.ready) { openLab(k); return; }
     if (lab) { toast(`還在等報告，大約 ${Math.max(1, Math.ceil(lab.readyAt - S.t))} 分鐘後出來。`, 2.5); return; }
-    say('you', '抽血送檢查'); plog('你：抽血送檢查');
+    say('you', '抽 ABG 送檢'); plog('你：抽 ABG 送檢');
     S.t += 2;
     say('nurse', `${c.nurse}：「好，我抽好送去檢驗科，報告大約 ${LAB_WAIT} 分鐘後出來，出來會通知你。」`);
     publicDraw(S.t);
@@ -1514,7 +1519,7 @@ async function boot() {
     const c = C();
     if (S.labs.some(l => l.id === PC.id)) return;
     S.labs.push({ id: PC.id, bed: CASES[PC.id].bed, note: c.labs.note, at, readyAt: at + LAB_WAIT, ready: false, seen: false,
-      rows: c.labs.rows.map(([label, value, unit, ref, flag]) => ({ group: '抽血檢查', label, value, unit, ref, flag })) });
+      rows: c.labs.rows.map(([label, value, unit, ref, flag]) => ({ group: '動脈血氣體 ABG', label, value, unit, ref, flag })) });
   }
   function closePublicCase() {
     const id = PC.id;
@@ -1609,7 +1614,7 @@ async function boot() {
     $('pcase').hidden = true;
     $('pdWhen').textContent = fmt(S.t);
     $('pdTitle').textContent = title || `${CASES[PC.id].bed} 的${c.name}沒有救回來`;
-    $('pdText').textContent = `${reason}${title ? '' : '這是遊戲；在真實的病房裡，值班醫師可能就在某一個晚上面對這一刻。'}下面是今晚發生的事，紅色的是警訊。`;
+    $('pdText').textContent = `${reason}${title ? '' : '這是遊戲；在真實的病房裡，值班 RT 可能就在某一個晚上面對這一刻。'}下面是今晚發生的事，紅色的是警訊。`;
     $('pdTimeline').innerHTML = S.plog.map(l => `<li class="${l.kind}"><time>${fmt(l.t)}</time><span>${esc(l.text)}</span></li>`).join('');
     $('pdCard').innerHTML = tipHtml(c);
     $('pdeath').hidden = false;
@@ -1629,8 +1634,8 @@ async function boot() {
   // the summary's word on looking after yourself, for a doctor who went without food or held it in
   function selfCare() {
     const lines = [
-      ...(S.looFull ? ['值班醫師常常一忙就憋尿，憋久了容易泌尿道感染、腎結石。再忙，也要記得上廁所。'] : []),
-      ...(S.eaten <= 0 ? ['值班醫師常常忙到忘了吃飯。餓著肚子做事，精力掉得快、判斷也會變差。再忙，也要記得吃飯。'] : []),
+      ...(S.looFull ? ['值班 RT 常常一忙就憋尿，憋久了容易泌尿道感染、腎結石。再忙，也要記得上廁所。'] : []),
+      ...(S.eaten <= 0 ? ['值班 RT 常常忙到忘了吃飯。餓著肚子做事，精力掉得快、判斷也會變差。再忙，也要記得吃飯。'] : []),
     ];
     return lines.length ? '<li class="tiphead">照顧自己</li>' + lines.map(t => `<li class="tip">${esc(t)}</li>`).join('') : '';
   }
@@ -1646,7 +1651,7 @@ async function boot() {
     $('hStamp').hidden = S.shift !== 'hard';
     if (S.shift === 'hard') drawStamp($('hStamp'), '#cf2027');
     $('hWhen').textContent = `${fmt(S.t)} · ${S.collapsed ? '累倒了' : S.t >= END ? '白班來接手了' : '提早交班'}`;
-    $('hTitle').textContent = (S.nick ? `${S.nick}醫師，` : '') + (S.collapsed ? '你累倒了' : all ? `${CN[tonight.length]}床都穩住了，你撐過這一晚`
+    $('hTitle').textContent = (S.nick ? `${S.nick}，` : '') + (S.collapsed ? '你累倒了' : all ? `${CN[tonight.length]}床都穩住了，你撐過這一晚`
       : left.length ? `${S.t >= END ? '天亮了，' : ''}還有 ${left.length} 床沒處理好` : seen.length ? `穩住了 ${seen.length} 床` : '今晚先到這裡');
     $('hStats').innerHTML = [
       ['睡了', Math.round(st.sleptMin), '分鐘'], ['被電話吵醒', st.wakeups, '次'], ['其實電話講就好', S.trivial || 0, '通'],
@@ -1654,16 +1659,16 @@ async function boot() {
     ].map(([k, v, u]) => `<div class="stat"><small>${k}</small><b>${v}<span>${u}</span></b></div>`).join('');
     const cards = tonight.filter(c => S.calls[c.id]);
     $('hCases').innerHTML = seen.map(c => `<li class="tip"><b>${CASES[c.id].bed}</b> ${esc(c.results[S.outcome[c.id]])}</li>`).join('')
-      + left.map(c => `<li class="tip miss"><b>${CASES[c.id].bed}</b> ${esc(c.name)}${S.calls[c.id].opened ? '還沒處理好，就交給白班了' : '等到早上，都沒有醫師去看'}</li>`).join('')
+      + left.map(c => `<li class="tip miss"><b>${CASES[c.id].bed}</b> ${esc(c.name)}${S.calls[c.id].opened ? '還沒處理好，就交給白班了' : '等到早上，都沒有 RT 去看'}</li>`).join('')
       + cards.map(c => `<li class="tiphead">${esc(c.card.title)}</li>` + c.card.points.map(p => `<li class="tip">${esc(p)}</li>`).join('')).join('')
       + selfCare();
     $('hScore').textContent = st.wakeups;
     $('hPgy').src = ME(all && !S.collapsed ? 'survived' : 'sleepy');
-    $('hBadge').textContent = `稱號：${S.collapsed ? '累倒在護理站的值班醫師' : !all ? '還在值班的人' : S.pretries ? '跌倒了再站起來的值班醫師' : '一個人撐住整層樓的值班醫師'}`;
+    $('hBadge').textContent = `稱號：${S.collapsed ? '累倒在護理站的值班 RT' : !all ? '還在值班的人' : S.pretries ? '跌倒了再站起來的值班 RT' : '一個人撐住整層呼吸器的值班 RT'}`;
     $('hChiefAvatar').style.backgroundImage = `url(${IMG('nurse_caring')})`;
     $('hChief').textContent = S.collapsed
-      ? '你趴在護理站睡著了，怎麼叫都叫不醒，只好打電話請總值醫師來接手整層樓。值班再忙，也要找空檔吃飯、躺一下：照顧好自己，才照顧得了病人。'
-      : '一晚的電話，大部分是小事。可是接起來之前，你沒辦法知道哪一通是真的危險，所以每一通都得醒來、聽完、判斷。下次在醫院看到值班醫師一臉沒睡飽，你大概知道為什麼了。';
+      ? '你趴在護理站睡著了，怎麼叫都叫不醒，只好打電話請另一位 RT 來接手整層樓。值班再忙，也要找空檔吃飯、躺一下：照顧好自己，才照顧得了病人。'
+      : '一晚的電話，大部分是小事。可是接起來之前，你沒辦法知道哪一通是真的危險，所以每一通都得醒來、聽完、判斷。下次在醫院看到值班 RT 一臉沒睡飽，你大概知道為什麼了。';
     S.result = `我在《${GAME.title}》${GAME.edition}值了一晚${SHIFT_NAME[S.shift]}：穩住 ${seen.length}/${tonight.length} 床，被電話吵醒 ${st.wakeups} 次，其中 ${S.trivial || 0} 通其實電話講就好${S.collapsed ? `，${fmt(S.t)} 累倒了` : ''}。`;
     $('handover').hidden = false;
   }
@@ -1838,16 +1843,18 @@ async function boot() {
   const SURNAMES = ['王', '林', '陳', '黃', '張', '李', '吳', '劉', '蔡', '楊', '許', '鄭', '謝', '郭'];
   // a few quiet beds for the handover sheet; add more and up to five are drawn each night
   const DECOYS = [
-    { who: '伯伯', age: [70, 86], dx: '腦中風復健中', lay: '今天血壓有點高，有開需要時吃的藥，晚上照常。' },
-    { who: '先生', age: [42, 64], dx: '蜂窩性組織炎', lay: '打抗生素第三天，已經退燒，紅腫有消。' },
-    { who: '女士', age: [30, 50], dx: '急性腸胃炎', lay: '今天開始吃粥，點滴明天可以停。' },
+    { who: '伯伯', age: [70, 88], dx: '長期呼吸器 · Tr', lay: 'PSV 10/5、FiO2 30%，晚上照常，痰量少。' },
+    { who: '先生', age: [45, 68], dx: '頸椎損傷 · Tr', lay: 'AC 模式，白天試過 2 小時 trach collar，晚上接回呼吸器。' },
+    { who: '阿嬤', age: [75, 92], dx: '肺炎恢復期 · Tr', lay: 'FiO2 從 40% 降到 30%，SpO2 都在 95% 以上。' },
+    { who: '先生', age: [55, 75], dx: 'COPD · BiPAP', lay: '晚上睡覺戴 BiPAP 12/5，白天鼻導管 2 L。' },
+    { who: '女士', age: [40, 65], dx: 'ALS · Tr', lay: 'Home ventilator，家屬很熟悉照護，注意 cuff 壓力。' },
   ];
   function showBrief() {
     $('briefTitle').textContent = `今晚，${WARD} 交給你了`;
-    $('briefEyebrow').textContent = `交班 · 熱愛 內科 ${WARD} 病房`;
+    $('briefEyebrow').textContent = `交班 · 呼吸照護病房 ${WARD}`;
     $('briefMe').src = ME('confident');
-    $('briefLevel').textContent = `${S.nick ? `${S.nick}醫師` : '你'} · 今晚的值班醫師`;
-    $('briefFrom').textContent = `白班 R1 ${pickN(['陳', '黃', '張', '李', '吳', '蔡'], 1)[0]}醫師 → 你`;
+    $('briefLevel').textContent = `${S.nick ? S.nick : '你'} · 今晚的值班 RT`;
+    $('briefFrom').textContent = `白班 RT ${pickN(['陳', '黃', '張', '李', '吳', '蔡'], 1)[0]}學姊 → 你`;
     const n = Math.min(5, DECOYS.length);
     const beds = pickN(BEDS.filter(b => !b.isCase && b.occupied), n).sort((a, b) => a.id.localeCompare(b.id));
     const items = pickN(DECOYS, n);
@@ -2145,7 +2152,7 @@ async function boot() {
       }
       publicTick();
       if (S.labs.some(l => !l.ready && S.t >= l.readyAt)) labsArrive();
-      if (!S.dinnerNoted && S.t >= PACE.dinnerAt) { S.dinnerNoted = true; toast('小雯：「醫師，你的便當送到值班室了，有空趕快去吃。」', 5, 'nurse_caring'); }
+      if (!S.dinnerNoted && S.t >= PACE.dinnerAt) { S.dinnerNoted = true; toast('小雯：「RT，你的便當送到值班室了，有空趕快去吃。」', 5, 'nurse_caring'); }
       if (S.t >= END) endShift();
       // tiredness: a warning at 20% and at 10%, and at 0% the doctor drops -- but never in the
       // middle of a patient, a call or compressions: the moment they are back on their feet
