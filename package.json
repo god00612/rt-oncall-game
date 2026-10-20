@@ -1,0 +1,15 @@
+{
+  "name": "rt-oncall-game",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RT 夜班 · 呼吸治療師版：以《我熱愛值班》範本製作的瀏覽器 3D 值班遊戲",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "test": "node tests/check-data.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "SEE LICENSE IN LICENSE.md"
+}

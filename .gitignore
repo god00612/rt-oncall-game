@@ -8,3 +8,7 @@ __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
