@@ -1,0 +1,10 @@
+# 真實病人產生的案例（即使已去識別化，也要人工審過才搬進 game/cases/demo 以外的地方）
+cases/
+game/cases/real/
+raw/
+*.raw.json
+# 一般
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
