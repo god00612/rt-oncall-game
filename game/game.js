@@ -1941,6 +1941,28 @@ async function boot() {
   stickZone.addEventListener('pointermove', e => { if (e.pointerId === stickId) stickAt(e); });
   ['pointerup', 'pointercancel'].forEach(ev => stickZone.addEventListener(ev, e => { if (e.pointerId === stickId) stickOff(); }));
   stickZone.addEventListener('lostpointercapture', e => { if (e.pointerId === stickId) stickOff(); });
+  // the mouse: click the floor and the player walks there; hold the button and the target follows
+  // the pointer. Keys or the stick take over at once. A double click does what E does.
+  let goal = null;
+  const ray = new THREE.Raycaster(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
+  const goalMark = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.24, 32), new THREE.MeshBasicMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.85, depthWrite: false }));
+  goalMark.rotation.x = -Math.PI / 2; goalMark.visible = false; scene.add(goalMark);
+  function aimAt(e) {
+    const r = canvas.getBoundingClientRect();
+    ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, cam);
+    if (!ray.ray.intersectPlane(ground, hit)) return;
+    goal = { x: hit.x, z: hit.z, stuck: 0 };
+    goalMark.position.set(hit.x, 0.02, hit.z); goalMark.visible = true;
+  }
+  function dropGoal() { goal = null; goalMark.visible = false; }
+  let mouseHeld = false;
+  canvas.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse' || e.button !== 0 || !S.started || S.paused || S.mode !== 'walk') return;
+    mouseHeld = true; aimAt(e);
+  });
+  canvas.addEventListener('pointermove', e => { if (mouseHeld && e.pointerType === 'mouse' && S.mode === 'walk') aimAt(e); });
+  window.addEventListener('pointerup', e => { if (e.pointerType === 'mouse') mouseHeld = false; });
+  canvas.addEventListener('dblclick', () => { if (S.started && !S.paused && S.mode === 'walk') { dropGoal(); act(); } });
   // phones: put the page sideways where the browser allows it (Android, from a tap, in full
   // screen); elsewhere the cover in index.html asks for the phone to be turned, and turning it
   // upright mid-shift stops the clock
@@ -2025,6 +2047,68 @@ async function boot() {
     slideSide = best.s;
     p.x = x + tx * slideSide * d; p.z = z + tz * slideSide * d; collide(p);
   }
+  // A click is reached the long way round: a grid over the floor, a cell open where the player's
+  // circle fits, and A* across it. Nurses move about, so only the walls and furniture count; the
+  // walk itself still slides round a nurse in the way.
+  const CELL = 0.2, GW = Math.ceil((X1 - X0) / CELL), GH = Math.ceil((ZF - ZB) / CELL);
+  let open = null;
+  const cx = i => X0 + (i + 0.5) * CELL, cz = j => ZB + (j + 0.5) * CELL;
+  const fits = (x, z) => solids.every(b => Math.hypot(x - Math.max(b[0], Math.min(x, b[2])), z - Math.max(b[1], Math.min(z, b[3]))) >= R + 0.02);
+  function openAt(i, j) {
+    if (!open) { open = new Uint8Array(GW * GH); for (let jj = 0; jj < GH; jj++) for (let ii = 0; ii < GW; ii++) open[jj * GW + ii] = fits(cx(ii), cz(jj)) ? 1 : 0; }
+    return i >= 0 && j >= 0 && i < GW && j < GH && open[j * GW + i] === 1;
+  }
+  const cellOf = (x, z) => [Math.floor((x - X0) / CELL), Math.floor((z - ZB) / CELL)];
+  // a click on a bed or a counter: walk to the nearest open cell to it
+  function nearestOpen(i, j) {
+    for (let r = 0; r < 12; r++) {
+      let best = null;
+      for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+        if (Math.max(Math.abs(di), Math.abs(dj)) !== r || !openAt(i + di, j + dj)) continue;
+        const d = di * di + dj * dj; if (!best || d < best[2]) best = [i + di, j + dj, d];
+      }
+      if (best) return best;
+    }
+    return null;
+  }
+  const clear = (a, b) => {
+    const n = Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.08);
+    for (let k = 1; k <= n; k++) if (!fits(a.x + (b.x - a.x) * k / n, a.z + (b.z - a.z) * k / n)) return false;
+    return true;
+  };
+  function findPath(from, to) {
+    const [si, sj] = cellOf(from.x, from.z), end = nearestOpen(...cellOf(to.x, to.z));
+    if (!end) return null;
+    const [ei, ej] = end, goalIdx = ej * GW + ei, startIdx = sj * GW + si;
+    const g = new Float32Array(GW * GH).fill(Infinity), came = new Int32Array(GW * GH).fill(-1), done = new Uint8Array(GW * GH);
+    const heap = [[0, startIdx]]; g[startIdx] = 0;
+    const push = it => { heap.push(it); let k = heap.length - 1; while (k) { const q = (k - 1) >> 1; if (heap[q][0] <= heap[k][0]) break; [heap[q], heap[k]] = [heap[k], heap[q]]; k = q; } };
+    const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };
+    while (heap.length) {
+      const [, cur] = pop(); if (done[cur]) continue; done[cur] = 1;
+      if (cur === goalIdx) break;
+      const ci = cur % GW, cj = (cur - ci) / GW;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        if (!di && !dj) continue;
+        const ni = ci + di, nj = cj + dj;
+        // no cutting a corner diagonally past a wall's end
+        if (!openAt(ni, nj) || (di && dj && (!openAt(ci + di, cj) || !openAt(ci, cj + dj)))) continue;
+        const nk = nj * GW + ni, ng = g[cur] + (di && dj ? 1.414 : 1);
+        if (ng < g[nk]) { g[nk] = ng; came[nk] = cur; push([ng + Math.hypot(ei - ni, ej - nj), nk]); }
+      }
+    }
+    if (came[goalIdx] < 0 && goalIdx !== startIdx) return null;
+    const cells = [];
+    for (let k = goalIdx; k !== startIdx && k >= 0; k = came[k]) cells.unshift({ x: cx(k % GW), z: cz(Math.floor(k / GW)) });
+    if (fits(to.x, to.z) && cells.length) cells[cells.length - 1] = { x: to.x, z: to.z };
+    // straighten: from each point, skip ahead to the farthest point in plain sight
+    const path = []; let at = { x: from.x, z: from.z }, k = 0;
+    while (k < cells.length) {
+      let far = k; for (let m = cells.length - 1; m > k; m--) if (clear(at, cells[m])) { far = m; break; }
+      path.push(cells[far]); at = cells[far]; k = far + 1;
+    }
+    return path;
+  }
   const fwd = new THREE.Vector3(-Math.sin(YAW), 0, -Math.cos(YAW)), right = new THREE.Vector3(Math.cos(YAW), 0, -Math.sin(YAW));
   let walkPhase = 0;
   function move(dt) {
@@ -2035,12 +2119,20 @@ async function boot() {
     if (keys.has('arrowleft') || keys.has('a')) ix -= 1;
     const thumb = stick.mag > STICK_DEAD;
     if (thumb) { ix = stick.x; iz = stick.y; }
+    if (ix || iz || S.mode !== 'walk') dropGoal();
     const { legs, arms } = player.userData;
-    if (S.mode !== 'walk' || (!ix && !iz)) {
+    let dir = null;
+    if (goal && !goal.path) { goal.path = findPath(player.position, goal); if (!goal.path?.length) dropGoal(); }
+    if (goal) {
+      let wp = goal.path[0];
+      if (Math.hypot(wp.x - player.position.x, wp.z - player.position.z) < 0.12) { goal.path.shift(); wp = goal.path[0]; }
+      if (!wp) dropGoal(); else dir = new THREE.Vector3(wp.x - player.position.x, 0, wp.z - player.position.z).normalize();
+    } else if (ix || iz) dir = new THREE.Vector3().addScaledVector(right, ix).addScaledVector(fwd, iz).normalize();
+    if (S.mode !== 'walk' || !dir) {
       walkPhase = 0; legs.forEach(l => { l.rotation.x *= 0.7; }); arms.forEach(a => { a.rotation.x *= 0.7; });
       return;
     }
-    const dir = new THREE.Vector3().addScaledVector(right, ix).addScaledVector(fwd, iz).normalize();
+    const from = { x: player.position.x, z: player.position.z };
     // Shift, or the stick pushed to its rim, runs; under 20% there is nothing left to run on
     // (TIRED), and a short reminder says so
     const wantRun = keys.has('shift') || (thumb && stick.mag > STICK_RUN);
@@ -2050,6 +2142,12 @@ async function boot() {
     // a slow frame moves the full distance, in steps short enough that a wall cannot be skipped
     const steps = Math.ceil(dt / 0.04);
     for (let i = 0; i < steps; i++) walkStep(player.position, dir, speed * dt / steps);
+    // held up (a nurse standing in the doorway): give up after a second rather than push forever
+    if (goal) {
+      const went = Math.hypot(player.position.x - from.x, player.position.z - from.z);
+      goal.stuck = went < speed * dt * 0.2 ? goal.stuck + dt : 0;
+      if (goal.stuck > 1) dropGoal();
+    }
     if (run) S.energy = Math.max(0, S.energy - dt * 0.4 * SPEND[S.shift]);
     const target = Math.atan2(dir.x, dir.z);
     let diff = target - player.rotation.y; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
