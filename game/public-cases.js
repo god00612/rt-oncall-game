@@ -597,7 +597,7 @@ export const PMUS = {
       ],
     },
     why: {
-      ask: 'VTi 和 VTe 差不多，Cstat 11、R 13.6，Ppeak 沒變。Trends 上 total RR 掉到 set RR 的同一刻，VT 也掉了。VT 為什麼掉？',
+      ask: 'Pvent + Pmus = Flow × R + V / C。VTi 和 VTe 差不多，Cstat 11、R 13.6，Ppeak 沒變。Trends 上 total RR 掉到 set RR 的同一刻，VT 也掉了。公式裡哪一項變了？',
       options: [
         { id: 'pmus', text: '肌鬆讓病人的 Pmus 消失：之前的 527 有一大半是病人自己吸的，現在只剩機器那一份', grade: 'best', min: 2, next: 'fix',
           say: '肌鬆前 set RR 12、total RR 20 幾，VT 忽高忽低：那是病人自己在用力吸。PC 模式下，VT 是機器的驅動壓加上病人的 Pmus。打了肌鬆之後只剩機器：Evita 的 Pinsp 是絕對壓力，Pinsp 24 時驅動壓 12 × Cstat 約 10，剛好是 Trends 上那條 120；調到 28 後驅動壓 16 × 11 ≈ 170，也對得上。' },
@@ -641,7 +641,8 @@ export const PMUS = {
   card: {
     title: 'PC 模式下打了肌鬆：記住四件事',
     points: [
-      'PC 模式下，VT = 機器的驅動壓（Pinsp − PEEP）加上病人自己吸氣的力量（Pmus）。叫出 Trends：total RR 掉到 set RR、VT 同時掉成一條平線，就是自發呼吸消失了。',
+      '核心公式：Pvent + Pmus = Flow × R + V / C。PC 模式下 VT 掉，就是 P（Pvent、Pmus）、R、C 其中一項變了；逐項比較前後，就找得到原因。',
+      '這個案例 R、C、Pvent 都沒變小，變的是 Pmus：Trends 上 total RR 掉到 set RR、VT 同時變平線，就是自發呼吸消失了。',
       '病人用力吸時，看起來漂亮的 VT 可能其實太大（這個案例是 12.5 mL/kg PBW），有病人自己造成肺傷害（P-SILI）的風險。',
       '打了鎮靜或肌鬆後，Pmus 不見了，VT 會掉到只剩機器那一份；要重新評估 Pinsp，或改 VC 確保 MV。',
       'Dräger 的 Pinsp 是絕對壓力，驅動壓要減掉 PEEP。調完設定或給藥 10–15 分鐘內，追 VT、MV 和 ABG。',
