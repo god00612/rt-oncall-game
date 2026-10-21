@@ -552,9 +552,106 @@ export const COPD = {
   },
 };
 
+// A man with pulmonary oedema, ten minutes after the rate went up and a paralytic went in. The
+// point: on pressure control the tidal volume is the machine plus the patient's own pull (Pmus);
+// take the pull away and only what the stiff lung gives back is left. Made from a real night,
+// de-identified, and reviewed by the RT who brought it.
+export const PMUS = {
+  id: 'ppmus', bed: '04C', nurse: '怡君', name: '陳先生', who: '陳先生 · 40 多歲 · 肺水腫插管',
+  short: '剛調完呼吸器，VT 掉到 100 多', late: 'worse', extra: 'lung',
+  results: { stable: '陳先生改成 VC 後 MV 回來了' },
+  labs: {
+    rows: [['pH', 7.29, '', '7.35–7.45', 'L'], ['PaCO2', 64, 'mmHg', '35–45', 'H'], ['PaO2', 86, 'mmHg', '80–100'],
+      ['HCO3', 30.1, 'mEq/L', '22–26', 'H']],
+    note: '改成 VC 後的 ABG：PaCO2 從 102 往下降了，pH 回到 7.29。肌鬆中的病人 MV 完全靠機器給，接下來還要再追一次。',
+  },
+  call: 'RT，{bed} 陳先生呼吸器一直叫 VT low，VT 掉到 100 多。你剛剛調完設定才十分鐘耶。',
+  again: 'RT！{bed} 陳先生 ABG 出來了，PaCO2 102、pH 7.14！',
+  phone: '剛調完還不穩，先把 VT low 警報下限調低一點',
+  callWhy: 'VT 一下子少了三分之二，要到床邊分清楚是漏氣、阻塞、肺變硬，還是病人自己不吸了。把警報調低只會把問題藏起來。',
+  intro: 'RT，陳先生，40 多歲，肺水腫插管。醫師剛加上肌鬆 Genso（atracurium）3 mL/hr，你也剛把 set RR 從 12 調到 28、Pinsp 從 24 調到 28。十分鐘後 VT 還是只有 160 幾。',
+  introLate: 'RT 你終於來了，ABG PaCO2 102，醫師在問怎麼回事。',
+  states: {
+    start: { hr: 112, bp: [118, 70], spo2: 96, lung: null, mind: '打了肌鬆，沒有自發呼吸',
+      vent: { Mode: 'PC-AC', Pinsp: 28, PEEP: 12, 'RR set/total': '28/28', Ti: '0.7 s', VTi: 168, VTe: 164, MV: 4.6, Ppeak: 29, hi: ['VTi', 'VTe', 'MV'] } },
+    compare: { hr: 112, bp: [118, 70], spo2: 96, lung: '兩側 crackles，左右對稱', mind: '打了肌鬆，胸廓起伏很小但對稱',
+      vent: { Mode: 'PC-AC', Pinsp: 28, PEEP: 12, 'RR set/total': '28/28', VTi: 168, VTe: 164, MV: 4.6, Cstat: 11.4, R: 13.6, hi: ['VTi', 'VTe', 'MV', 'Cstat'] } },
+    worse: { hr: 124, bp: [104, 62], spo2: 92, lung: undefined, mind: '打了肌鬆，皮膚潮紅、冒汗',
+      vent: { Mode: 'PC-AC', Pinsp: 28, PEEP: 12, 'RR set/total': '28/28', VTe: 168, MV: 4.8, Cstat: 9.9, hi: ['VTe', 'MV', 'Cstat'] } },
+    vc: { hr: 104, bp: [116, 68], spo2: 95, lung: '兩側 crackles', mind: '打了肌鬆，胸廓起伏變大了',
+      vent: { Mode: 'VC-AC', VT: 230, RR: 28, PEEP: 12, FiO2: '100%', MV: 6.4, Pplat: 29 } },
+  },
+  steps: {
+    first: {
+      ask: 'VT 從 527 掉到 168，MV 只剩 4.6。你先做什麼？',
+      askWarn: 'PaCO2 102、pH 7.14，VT 還是 168。你先做什麼？',
+      options: [
+        { id: 'look', text: '先看病人：胸廓起伏、呼吸音、血氧，再比較 VTi 和 VTe', grade: 'best', min: 2, state: 'compare', next: 'why',
+          say: '血氧 96%。兩側胸廓起伏都很小，但左右對稱；呼吸音兩側都是 crackles。VTi 168、VTe 164：幾乎一樣。床邊三台幫浦：Midazolam 8、Fentanyl 1、Genso 3 mL/hr。你叫出 Trends：肌鬆打下去那一刻，total RR 從 20 幾直接掉到 set RR 12，VTe 從 300–400 忽高忽低變成一條平線 120，MVe 只剩 1.4。你把 RR 調到 28 後，VTe 也只回到 170。' },
+        { id: 'suck', text: '肺水腫一定是泡沫痰，先抽痰', grade: 'ok', min: 4,
+          say: '抽出一點點稀稀的痰，VT 還是 168。',
+          why: 'Ppeak 沒有升高，不像痰塞住。抽痰前先看病人、看數據，再決定。' },
+        { id: 'alarm', text: '把 VT low 警報下限調低', grade: 'bad', min: 1, state: 'worse',
+          say: '警報安靜了。兩個多小時後，ABG 出來：PaCO2 102。',
+          why: '警報是在告訴你 MV 不夠。調低警報不會讓 CO2 排出去。' },
+      ],
+    },
+    why: {
+      ask: 'VTi 和 VTe 差不多，Cstat 11、R 13.6，Ppeak 沒變。Trends 上 total RR 掉到 set RR 的同一刻，VT 也掉了。VT 為什麼掉？',
+      options: [
+        { id: 'pmus', text: '肌鬆讓病人的 Pmus 消失：之前的 527 有一大半是病人自己吸的，現在只剩機器那一份', grade: 'best', min: 2, next: 'fix',
+          say: '肌鬆前 set RR 12、total RR 20 幾，VT 忽高忽低：那是病人自己在用力吸。PC 模式下，VT 是機器的驅動壓加上病人的 Pmus。打了肌鬆之後只剩機器：Evita 的 Pinsp 是絕對壓力，Pinsp 24 時驅動壓 12 × Cstat 約 10，剛好是 Trends 上那條 120；調到 28 後驅動壓 16 × 11 ≈ 170，也對得上。' },
+        { id: 'leak', text: 'cuff 漏氣', grade: 'bad', min: 3,
+          say: '你量了 cuff：24，沒問題。',
+          why: 'VTi 168、VTe 164 幾乎一樣，氣沒有漏掉，是送進去的就只有這麼多。' },
+        { id: 'ti', text: 'Ti 從 0.9 縮到 0.7，氣來不及送進去', grade: 'ok', min: 2,
+          say: '你看了流量波形：吸氣末流量已經回到零。',
+          why: '時間常數 τ = R × C ≈ 13.6 × 0.011 ≈ 0.15 秒，0.7 秒大約是 4.5 τ，吸氣時間夠。' },
+      ],
+    },
+    fix: {
+      ask: '病人已經沒有自發呼吸，MV 只剩 4.6。怎麼處理？',
+      options: [
+        { id: 'vc', text: '改 VC-AC，VT 用 PBW 5.5–6 mL/kg（約 230–250），確認 Pplat ≤ 30，30 分鐘後追 ABG', grade: 'best', min: 10, state: 'vc', next: 'after', draw: true,
+          say: 'VT 230、RR 28，MV 回到 6.4，Pplat 29。現在 MV 不再靠病人自己吸了。' },
+        { id: 'pinsp', text: 'Pinsp 加到 40，把 VT 拉回 500', grade: 'ok', min: 3,
+          say: 'Ppeak 衝到 40，警報又響了。',
+          why: 'Cstat 只有 11，VT 500 要驅動壓 45，Pplat 早就超過 30。目標是 PBW 6 mL/kg 左右，不是回到原本的 527：那個 527 本來就太大了。' },
+        { id: 'wait', text: '肌鬆剛上，等一下就會穩', grade: 'bad', min: 60, state: 'worse',
+          say: '一個小時後，VT 還是 168，病人開始冒汗。',
+          why: 'MV 只剩原本的一半，PaCO2 會一路往上衝。真實的那一晚，2.7 小時後 PaCO2 102、pH 7.14。' },
+      ],
+    },
+    after: {
+      ask: '改成 VC 230 之後，Pplat 29、MV 6.4。接下來？',
+      options: [
+        { id: 'follow', text: '追 ABG，和醫師討論 RM 和 PEEP titration，留意 Pplat 和血壓', grade: 'best', min: 5, next: 'done', outcome: 'stable',
+          say: '怡君：「好，我半小時後抽 ABG。」你在交班單寫上：肌鬆中，PC 已改 VC，Pplat 目標 ≤ 30。' },
+        { id: 'leave', text: '設定好了，回去休息', grade: 'ok', min: 1,
+          say: '怡君：「RT，他還在打肌鬆耶，ABG 不用追嗎？」',
+          why: '剛換模式又在用肌鬆，要追 ABG 確認 PaCO2。順應性這麼差，PEEP 和 Pplat 也要持續評估。' },
+      ],
+    },
+  },
+  warn: { state: 'worse', line: '怡君：「RT！ABG 出來了，PaCO2 102、pH 7.14！」', log: '陳先生 PaCO2 102、pH 7.14' },
+  fail: {
+    title: '陳先生的 CO2 一路往上衝',
+    text: 'MV 只剩一半，PaCO2 衝到 102、pH 7.14，最後要加 RR、加壓力，再改成 VC 才救回來。PC 模式下打了肌鬆，VT 會掉到只剩機器那一份。',
+  },
+  card: {
+    title: 'PC 模式下打了肌鬆：記住四件事',
+    points: [
+      'PC 模式下，VT = 機器的驅動壓（Pinsp − PEEP）加上病人自己吸氣的力量（Pmus）。叫出 Trends：total RR 掉到 set RR、VT 同時掉成一條平線，就是自發呼吸消失了。',
+      '病人用力吸時，看起來漂亮的 VT 可能其實太大（這個案例是 12.5 mL/kg PBW），有病人自己造成肺傷害（P-SILI）的風險。',
+      '打了鎮靜或肌鬆後，Pmus 不見了，VT 會掉到只剩機器那一份；要重新評估 Pinsp，或改 VC 確保 MV。',
+      'Dräger 的 Pinsp 是絕對壓力，驅動壓要減掉 PEEP。調完設定或給藥 10–15 分鐘內，追 VT、MV 和 ABG。',
+    ],
+  },
+};
+
 // the beds a night draws from (普通班 four to six a night, 大爛班 six to eight, never more than are
 // listed here); `night: true` marks a bed whose call says 半夜, which game.js only rings after 23:30
-export const PUBLIC_CASES = [SECRETION, PNEUMO, HFNC, CUFF, COPD];
+export const PUBLIC_CASES = [SECRETION, PNEUMO, HFNC, CUFF, COPD, PMUS];
 
 // CPR: chest compressions to a beat. 30 compressions at 100–120 a minute, judged on exactly the
 // range the screen gives; the rate is the median of the presses after the first two, so a
