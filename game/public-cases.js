@@ -569,7 +569,7 @@ export const PMUS = {
   again: 'RT！{bed} 陳先生 ABG 出來了，PaCO2 102、pH 7.14！',
   phone: '剛調完還不穩，先把 VT low 警報下限調低一點',
   callWhy: 'VT 一下子少了三分之二，要到床邊分清楚是漏氣、阻塞、肺變硬，還是病人自己不吸了。把警報調低只會把問題藏起來。',
-  intro: 'RT，陳先生，40 多歲，肺水腫插管。你剛把 RR 調到 28、Pinsp 調到 28，醫師也剛開了肌鬆 3 mL/hr。十分鐘後 VT 就掉到 160 幾。',
+  intro: 'RT，陳先生，40 多歲，肺水腫插管。醫師剛加上肌鬆 Genso（atracurium）3 mL/hr，你也剛把 set RR 從 12 調到 28、Pinsp 從 24 調到 28。十分鐘後 VT 還是只有 160 幾。',
   introLate: 'RT 你終於來了，ABG PaCO2 102，醫師在問怎麼回事。',
   states: {
     start: { hr: 112, bp: [118, 70], spo2: 96, lung: null, mind: '打了肌鬆，沒有自發呼吸',
@@ -587,7 +587,7 @@ export const PMUS = {
       askWarn: 'PaCO2 102、pH 7.14，VT 還是 168。你先做什麼？',
       options: [
         { id: 'look', text: '先看病人：胸廓起伏、呼吸音、血氧，再比較 VTi 和 VTe', grade: 'best', min: 2, state: 'compare', next: 'why',
-          say: '血氧 96%。兩側胸廓起伏都很小，但左右對稱；呼吸音兩側都是 crackles。VTi 168、VTe 164：幾乎一樣。' },
+          say: '血氧 96%。兩側胸廓起伏都很小，但左右對稱；呼吸音兩側都是 crackles。VTi 168、VTe 164：幾乎一樣。床邊三台幫浦：Midazolam 8、Fentanyl 1、Genso 3 mL/hr。你叫出 Trends：肌鬆打下去那一刻，total RR 從 20 幾直接掉到 set RR 12，VTe 從 300–400 忽高忽低變成一條平線 120，MVe 只剩 1.4。你把 RR 調到 28 後，VTe 也只回到 170。' },
         { id: 'suck', text: '肺水腫一定是泡沫痰，先抽痰', grade: 'ok', min: 4,
           say: '抽出一點點稀稀的痰，VT 還是 168。',
           why: 'Ppeak 沒有升高，不像痰塞住。抽痰前先看病人、看數據，再決定。' },
@@ -597,10 +597,10 @@ export const PMUS = {
       ],
     },
     why: {
-      ask: 'VTi 和 VTe 差不多，Cstat 11、R 13.6，Ppeak 沒變。VT 為什麼掉？',
+      ask: 'VTi 和 VTe 差不多，Cstat 11、R 13.6，Ppeak 沒變。Trends 上 total RR 掉到 set RR 的同一刻，VT 也掉了。VT 為什麼掉？',
       options: [
         { id: 'pmus', text: '肌鬆讓病人的 Pmus 消失：之前的 527 有一大半是病人自己吸的，現在只剩機器那一份', grade: 'best', min: 2, next: 'fix',
-          say: '調整前 set RR 12、total RR 21，病人在用力吸。PC 模式下，VT 是機器的驅動壓加上病人的 Pmus。打了肌鬆之後只剩機器：Evita 的 Pinsp 是絕對壓力，驅動壓 28 − 12 = 16，乘上 Cstat 約 11，剛好約 170 mL。' },
+          say: '肌鬆前 set RR 12、total RR 20 幾，VT 忽高忽低：那是病人自己在用力吸。PC 模式下，VT 是機器的驅動壓加上病人的 Pmus。打了肌鬆之後只剩機器：Evita 的 Pinsp 是絕對壓力，Pinsp 24 時驅動壓 12 × Cstat 約 10，剛好是 Trends 上那條 120；調到 28 後驅動壓 16 × 11 ≈ 170，也對得上。' },
         { id: 'leak', text: 'cuff 漏氣', grade: 'bad', min: 3,
           say: '你量了 cuff：24，沒問題。',
           why: 'VTi 168、VTe 164 幾乎一樣，氣沒有漏掉，是送進去的就只有這麼多。' },
@@ -641,7 +641,7 @@ export const PMUS = {
   card: {
     title: 'PC 模式下打了肌鬆：記住四件事',
     points: [
-      'PC 模式下，VT = 機器的驅動壓（Pinsp − PEEP）加上病人自己吸氣的力量（Pmus）。',
+      'PC 模式下，VT = 機器的驅動壓（Pinsp − PEEP）加上病人自己吸氣的力量（Pmus）。叫出 Trends：total RR 掉到 set RR、VT 同時掉成一條平線，就是自發呼吸消失了。',
       '病人用力吸時，看起來漂亮的 VT 可能其實太大（這個案例是 12.5 mL/kg PBW），有病人自己造成肺傷害（P-SILI）的風險。',
       '打了鎮靜或肌鬆後，Pmus 不見了，VT 會掉到只剩機器那一份；要重新評估 Pinsp，或改 VC 確保 MV。',
       'Dräger 的 Pinsp 是絕對壓力，驅動壓要減掉 PEEP。調完設定或給藥 10–15 分鐘內，追 VT、MV 和 ABG。',
